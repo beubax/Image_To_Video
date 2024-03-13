@@ -1,6 +1,7 @@
 hmdb51/
 Videos/
 extract_rar.sh
+hmdb51.zip
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
