@@ -10,8 +10,6 @@ import torch
 import torch.nn as nn
 from einops import rearrange
 import numpy as np
-import torchshow as ts
-from scipy.linalg import eigh
 
 from vit.utils import trunc_normal_
 
