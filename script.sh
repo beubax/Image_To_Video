@@ -7,6 +7,7 @@ echo "running script"
 #$ -e err_26 # error file
 #$ -l gpu_type=P100
 #$ -l gpus=1
+#$ -pe omp 8
 #$ -V
 #$ -m b
 
@@ -21,14 +22,13 @@ module load python3/3.10.12
 module load gcc/8.3.0
 module load cuda
 source venv/bin/activate
-pip install pytorch-lightning
 
 # export PATH="$PATH:/usr4/dl523/dgordon/.local/bin"
 # echo "PATH is now set to: $PATH"
 
 # run job
 
-python3 train.py --dataset-root hmdb51
+python train.py --dataset-root hmdb51 --batch-size 8
 
 deactivate
 # some other useful options:
