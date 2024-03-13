@@ -27,7 +27,7 @@ source venv/bin/activate
 
 # run job
 
-python train.py --dataset-root hmdb51
+python3 train.py --dataset-root hmdb51
 
 deactivate
 # some other useful options:
