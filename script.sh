@@ -21,6 +21,7 @@ module load python3/3.10.12
 module load gcc/8.3.0
 module load cuda
 source venv/bin/activate
+pip install pytorch-lightning
 
 # export PATH="$PATH:/usr4/dl523/dgordon/.local/bin"
 # echo "PATH is now set to: $PATH"
