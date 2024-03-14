@@ -5,9 +5,9 @@ echo "running script"
 #$ -N firstjob  # Project name.  unique every time 
 #$ -o std_out_26 # standard out file
 #$ -e err_26 # error file
-#$ -l gpu_type=P100
+#$ -l gpu_type=A100-80G
 #$ -l gpus=1
-#$ -pe omp 8
+#$ -pe omp 4
 #$ -V
 #$ -m b
 
@@ -28,7 +28,7 @@ source venv/bin/activate
 
 # run job
 
-python train.py --dataset-root hmdb51 --batch-size 8
+python train.py --dataset-root hmdb51 --batch-size 32
 
 deactivate
 # some other useful options:
