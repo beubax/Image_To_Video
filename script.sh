@@ -5,7 +5,7 @@ echo "running script"
 #$ -N firstjob  # Project name.  unique every time 
 #$ -o std_out_26 # standard out file
 #$ -e err_26 # error file
-#$ -l gpu_type=A100-80G
+#$ -l gpu_type=A100
 #$ -l gpus=1
 #$ -pe omp 4
 #$ -V
