@@ -20,7 +20,7 @@ cd /projectnb/synthdata/tejas/Image_To_Video
 module load python3/3.10.12
 # pip install torch==2.1.0 --target /projectnb/textconv/dgordon/packages --upgrade
 module load gcc/8.3.0
-module load cuda
+module load cuda/11.6
 source venv/bin/activate
 
 # export PATH="$PATH:/usr4/dl523/dgordon/.local/bin"
@@ -28,7 +28,7 @@ source venv/bin/activate
 
 # run job
 
-python train.py --dataset-root hmdb51 --batch-size 32
+python train.py --dataset-root hmdb51 --annotation-path annotations --batch-size 32
 
 deactivate
 # some other useful options:
