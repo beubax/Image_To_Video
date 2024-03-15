@@ -6,6 +6,7 @@ hmdb51-val-meta.pickle
 hmdb51.zip
 std_out_26
 err_26
+*.ckpt
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
