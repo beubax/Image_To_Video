@@ -144,7 +144,6 @@ def main(
         accumulate_grad_batches=8,
         max_epochs=max_epochs,
         accelerator="auto",
-        gpus=-1,
         precision="16-mixed",
         fast_dev_run=fast_dev_run,
         logger=logger,
