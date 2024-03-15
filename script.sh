@@ -6,7 +6,7 @@ echo "running script"
 #$ -l h_rt=24:00:00   # Specify the hard time limit for the job
 #$ -o std_out_26 # standard out file
 #$ -e err_26 # error file
-#$ -l gpu_type=V100
+#$ -l gpu_type=TitanV
 #$ -l gpus=2
 #$ -pe omp 4
 #$ -V
