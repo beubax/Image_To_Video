@@ -134,22 +134,22 @@ def main(
         max_epochs=max_epochs,
     )
     
-    checkpointing = pl.callbacks.ModelCheckpoint(dirpath="checkpoints", every_n_train_steps = 50)
-    callbacks = [pl.callbacks.LearningRateMonitor(logging_interval="epoch"), checkpointing]
+    checkpointing = pl.callbacks.ModelCheckpoint(dirpath="checkpoints/", filename="{epoch}", monitor="train_loss", mode="min", every_n_train_steps = 50)
+    callbacks = [checkpointing, pl.callbacks.LearningRateMonitor(logging_interval="epoch")]
     logger = TensorBoardLogger("logs", name="VVIT")
 
     trainer = pl.Trainer(
         benchmark=True,
-        resume_from_checkpoint=resume_training,
         check_val_every_n_epoch=2,
-        accumulate_grad_batches=4,
+        accumulate_grad_batches=2,
         max_epochs=max_epochs,
         accelerator="auto",
+        gpus=-1,
         fast_dev_run=fast_dev_run,
         logger=logger,
         callbacks=callbacks,
     )
-    trainer.fit(model, train_dataloaders=train_dataloader, val_dataloaders=val_dataloader)
+    trainer.fit(model, train_dataloaders=train_dataloader, val_dataloaders=val_dataloader, ckpt_path=resume_training)
     trainer.save_checkpoint("./vvit_hdmb51.ckpt")
 
 
