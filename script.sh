@@ -29,7 +29,7 @@ source venv/bin/activate
 
 # run job
 
-python train.py --dataset-root hmdb51 --annotation-path annotations -t epoch=0-step=221.ckpt --batch-size 8
+python train.py --dataset-root hmdb51 --annotation-path annotations -t epoch=0-step=221.ckpt --batch-size 32
 
 deactivate
 # some other useful options:
