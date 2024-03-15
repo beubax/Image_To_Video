@@ -4,6 +4,8 @@ extract_rar.sh
 hmdb51-train-meta.pickle
 hmdb51-val-meta.pickle
 hmdb51.zip
+std_out_26
+err_26
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
