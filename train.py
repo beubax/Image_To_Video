@@ -15,6 +15,7 @@ from lightning_module import VideoLightningModule
 @click.command()
 @click.option("-r", "--dataset-root", type=click.Path(exists=True), required=True, help="path to dataset.")
 @click.option("-a", "--annotation-path", type=click.Path(exists=True), required=True, help="path to dataset.")
+@click.option("-t", "--resume-training", type=click.Path(exists=True), default=None, help="Checkpoint path to resume training from.")
 @click.option("-nc", "--num-classes", type=int, default=51, help="num of classes of dataset.")
 @click.option("-b", "--batch-size", type=int, default=32, help="batch size.")
 @click.option("-f", "--frames-per-clip", type=int, default=16, help="frame per clip.")
@@ -27,6 +28,7 @@ from lightning_module import VideoLightningModule
 def main(
     dataset_root,
     annotation_path,
+    resume_training,
     num_classes,
     batch_size,
     frames_per_clip,
@@ -131,11 +133,16 @@ def main(
         weight_decay=0.001,
         max_epochs=max_epochs,
     )
-
-    callbacks = [pl.callbacks.LearningRateMonitor(logging_interval="epoch")]
+    
+    checkpointing = pl.callbacks.ModelCheckpoint(dirpath="checkpoints", every_n_train_steps = 50)
+    callbacks = [pl.callbacks.LearningRateMonitor(logging_interval="epoch"), checkpointing]
     logger = TensorBoardLogger("logs", name="VVIT")
 
     trainer = pl.Trainer(
+        benchmark=True,
+        resume_from_checkpoint=resume_training,
+        check_val_every_n_epoch=2,
+        accumulate_grad_batches=4,
         max_epochs=max_epochs,
         accelerator="auto",
         fast_dev_run=fast_dev_run,
