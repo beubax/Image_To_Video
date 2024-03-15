@@ -1,6 +1,8 @@
 hmdb51/
 Videos/
 extract_rar.sh
+hmdb51-train-meta.pickle
+hmdb51-val-meta.pickle
 hmdb51.zip
 
 # Byte-compiled / optimized / DLL files
