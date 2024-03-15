@@ -7,7 +7,7 @@ echo "running script"
 #$ -o std_out_26 # standard out file
 #$ -e err_26 # error file
 #$ -l gpu_type=V100
-#$ -l gpus=4
+#$ -l gpus=2
 #$ -pe omp 4
 #$ -V
 #$ -m b
