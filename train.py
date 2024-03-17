@@ -143,6 +143,7 @@ def main(
         check_val_every_n_epoch=2,
         accumulate_grad_batches=8,
         max_epochs=max_epochs,
+        devices=-1,
         accelerator="auto",
         fast_dev_run=fast_dev_run,
         logger=logger,
