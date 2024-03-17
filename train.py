@@ -49,7 +49,7 @@ def main(
     [
         ToTensorVideo(),  # C, T, H, W
         Permute(dims=[1, 0, 2, 3]),  # T, C, H, W
-        RandAugment(magnitude=5, num_layers=2),
+        RandAugment(magnitude=10, num_layers=2),
         Permute(dims=[1, 0, 2, 3]),  # C, T, H, W
         T.Resize(size=(224,224)),
         Normalize(mean=imagenet_mean, std=imagenet_std),
@@ -140,8 +140,8 @@ def main(
 
     trainer = pl.Trainer(
         benchmark=True,
-        check_val_every_n_epoch=2,
-        accumulate_grad_batches=8,
+        check_val_every_n_epoch=4,
+        accumulate_grad_batches=4,
         max_epochs=max_epochs,
         devices=-1,
         accelerator="auto",
