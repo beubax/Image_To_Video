@@ -297,7 +297,7 @@ class VisionTransformer(nn.Module):
         # # indices = torch.nonzero(spatial_map)
         # indices = torch.nonzero(torch.ones_like(spatial_map))
 
-        x = rearrange(input, 'n c t h w -> n c t h w')  
+        x = rearrange(x, 'n c t h w -> n c t h w')  
 
         x = self.pretrained_video_classifier(x)
         x = self.head(x)
