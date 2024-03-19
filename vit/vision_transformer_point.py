@@ -299,7 +299,7 @@ class VisionTransformer(nn.Module):
         feats = x[indices[:, 0], indices[:, 1], indices[:, 2], indices[:, 3]]
 
         x = self.point_cloud_classify(feats, indices.to(torch.int32), B)
-        return x, spatial_map
+        return x
 
 
 def vit_tiny(patch_size=16, **kwargs):
