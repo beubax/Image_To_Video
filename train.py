@@ -131,7 +131,7 @@ def main(
 
     model = VideoLightningModule(
         num_classes=num_classes,
-        lr=3e-4,
+        lr=0.01,
         weight_decay=0.001,
         max_epochs=max_epochs,
         point_cloud_classify=point_cloud,
