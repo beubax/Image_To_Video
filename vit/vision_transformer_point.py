@@ -167,29 +167,29 @@ class ExampleNet(nn.Module):
     def __init__(self, shape):
         super().__init__()
         self.net = spconv.SparseSequential(
-            spconv.SubMConv3d(3, 64, kernel_size=(3,3,3), padding=(1,1,1)), 
+            spconv.SparseConv3d(3, 64, kernel_size=(3,3,3), padding=(1,1,1)), 
             nn.ReLU(),
             spconv.SparseMaxPool3d(kernel_size=(1,2,2), stride=(1,2,2)), 
             
-            spconv.SubMConv3d(64, 128, kernel_size=(3,3,3), padding=(1,1,1)), 
+            spconv.SparseConv3d(64, 128, kernel_size=(3,3,3), padding=(1,1,1)), 
             nn.ReLU(),
             spconv.SparseMaxPool3d(kernel_size=(2,2,2), stride=(2,2,2)), 
 
-            spconv.SubMConv3d(128, 256, kernel_size=(3,3,3), padding=(1,1,1)), 
+            spconv.SparseConv3d(128, 256, kernel_size=(3,3,3), padding=(1,1,1)), 
             nn.ReLU(),
-            spconv.SubMConv3d(256, 256, kernel_size=(3,3,3), padding=(1,1,1)), 
+            spconv.SparseConv3d(256, 256, kernel_size=(3,3,3), padding=(1,1,1)), 
             nn.ReLU(),
             spconv.SparseMaxPool3d(kernel_size=(2,2,2), stride=(2,2,2)), 
 
-            spconv.SubMConv3d(256, 512, kernel_size=(3,3,3), padding=(1,1,1)), 
+            spconv.SparseConv3d(256, 512, kernel_size=(3,3,3), padding=(1,1,1)), 
             nn.ReLU(),
-            spconv.SubMConv3d(512, 512, kernel_size=(3,3,3), padding=(1,1,1)), 
+            spconv.SparseConv3d(512, 512, kernel_size=(3,3,3), padding=(1,1,1)), 
             nn.ReLU(),
             spconv.SparseMaxPool3d(kernel_size=(2,2,2), stride=(2,2,2)),
 
-            spconv.SubMConv3d(512, 512, kernel_size=(3,3,3), padding=(1,1,1)), 
+            spconv.SparseConv3d(512, 512, kernel_size=(3,3,3), padding=(1,1,1)), 
             nn.ReLU(),
-            spconv.SubMConv3d(512, 512, kernel_size=(3,3,3), padding=(1,1,1)), 
+            spconv.SparseConv3d(512, 512, kernel_size=(3,3,3), padding=(1,1,1)), 
             nn.ReLU(),
             spconv.SparseMaxPool3d(kernel_size=(2,2,2), stride=(2,2,2)),
 

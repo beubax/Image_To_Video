@@ -20,7 +20,7 @@ train_transform = T.Compose(
     [
         ToTensorVideo(),  # C, T, H, W
         Permute(dims=[1, 0, 2, 3]),  # T, C, H, W
-        RandAugment(magnitude=5, num_layers=2),
+        RandAugment(magnitude=0, num_layers=2),
         Permute(dims=[1, 0, 2, 3]),  # C, T, H, W
         T.Resize(size=(224,224)),
         Normalize(mean=imagenet_mean, std=imagenet_std),
@@ -51,7 +51,7 @@ if not os.path.exists(train_metadata_file):
 
 train_dataloader = DataLoader(
         train_set,
-        batch_size=1,
+        batch_size=2,
         num_workers=1,
         shuffle=True,
         drop_last=True,
@@ -61,22 +61,19 @@ train_dataloader = DataLoader(
 
 model = vit_base(num_classes=51).to(torch.device('cuda:0'))
 load_pretrained_weights(model, model_name="vit_base", patch_size=16)
+model.eval()
 
+for batch in train_dataloader:
+    video, label = batch
+    # print(label)
+    output, spatial_map = model(video.to(torch.device('cuda:0')))
+    visualize_heatmap(spatial_map, video)
+    print(output.shape)
+    break
 
-
-for name, param in model.named_parameters():
-   print('{}: {}'.format(name, param.requires_grad))
-num_param = sum(p.numel() for p in model.parameters() if p.requires_grad)
-num_total_param = sum(p.numel() for p in model.parameters())
-print('Number of total parameters: {}, tunable parameters: {}'.format(num_total_param, num_param))
-
-
-# model.eval()
-# for batch in train_dataloader:
-#     video, label = batch
-#     # print(label)
-#     output = model(video.to(torch.device('cuda:0')))
-#     # visualize_heatmap(spatial_attention_map, video, scales=[16,16], dims=(14, 14))
-#     print(output.shape)
-#     break
+# for name, param in model.named_parameters():
+#    print('{}: {}'.format(name, param.requires_grad))
+# num_param = sum(p.numel() for p in model.parameters() if p.requires_grad)
+# num_total_param = sum(p.numel() for p in model.parameters())
+# print('Number of total parameters: {}, tunable parameters: {}'.format(num_total_param, num_param))
     

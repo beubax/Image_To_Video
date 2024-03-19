@@ -62,7 +62,7 @@ def visualize_predictions_gt(img, pred, gt, vis_folder, im_name, dim, scales, sa
         #print(f"Predictions saved at {pltname}.")
     return image
 
-def visualize_eigvec(eigvec, scales, dims, save=True):
+def visualize_eigvec(eigvec, scales=[16,16], dims=(14, 14), save=True):
     """
     Visualization of the second smallest eigvector
     """
@@ -109,21 +109,20 @@ def inverse_normalize(tensors, mean, std):
 
 # input = inverse_normalize(tensor=input, mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225))
 
-def visualize_heatmap(eigvec, frames, scales, dims):
+def visualize_heatmap(eigvec, frames, scales=[16,16], dims=(14, 14)):
     frames = inverse_normalize(frames, mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225))
     eigvec = eigvec[0,:, :, :].detach().cpu()
     for t, eigvec_t in enumerate(eigvec):
-        for h, eigvect_h in enumerate(eigvec_t):
-            frame = cv2.cvtColor(frames[t].permute(1, 2, 0).cpu().numpy().astype(np.uint8), cv2.COLOR_RGB2BGR)
-            cam = scipy.ndimage.zoom(eigvect_h.reshape(dims), scales, order=0, mode='nearest')
-            map_img = exposure.rescale_intensity(cam, out_range=(0, 255))
-            map_img = np.uint8(map_img)
-            heatmap_img = cv2.applyColorMap(map_img, cv2.COLORMAP_JET)
-            #merge map and frame
-            fin = cv2.addWeighted(heatmap_img, 0.3, frame, 0.7, 0.5, dtype=cv2.CV_64F)
+        frame = cv2.cvtColor(frames[t].permute(1, 2, 0).cpu().numpy().astype(np.uint8), cv2.COLOR_RGB2BGR)
+        cam = scipy.ndimage.zoom(eigvec_t, zoom= [1,1], order=0, mode='nearest')
+        map_img = exposure.rescale_intensity(cam, out_range=(0, 255))
+        map_img = np.uint8(map_img)
+        heatmap_img = cv2.applyColorMap(map_img, cv2.COLORMAP_JET)
+        #merge map and frame
+        fin = cv2.addWeighted(heatmap_img, 0.3, frame, 0.7, 0.5, dtype=cv2.CV_64F)
 
-            #show result
-            pltname = f"Frame{t+1}-Head{h+1}_spatial_attn.jpg"
-            cv2.imwrite(pltname, fin)
+        #show result
+        pltname = f"Frame{t+1}_spatial_attn.jpg"
+        cv2.imwrite(pltname, fin)
 
-            print(f"Heatmap saved at {pltname}.")
+        print(f"Heatmap saved at {pltname}.")
