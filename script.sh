@@ -6,8 +6,7 @@ echo "running script"
 #$ -l h_rt=12:00:00   # Specify the hard time limit for the job
 #$ -o std_out_26 # standard out file
 #$ -e err_26 # error file
-#$ -l gpu_type=P100
-#$ -l gpu_memory=16G
+#$ -l gpu_type=A100
 #$ -l gpus=1
 #$ -pe omp 4
 #$ -V
@@ -30,7 +29,7 @@ source venv/bin/activate
 
 # run job
 
-python train.py --dataset-root hmdb51 --annotation-path annotations -t epoch=0-step=221.ckpt --batch-size 8
+python train.py --dataset-root hmdb51 --annotation-path annotations --batch-size 32 -p True
 
 deactivate
 # some other useful options:
