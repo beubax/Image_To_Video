@@ -16,6 +16,7 @@ from lightning_module import VideoLightningModule
 @click.option("-r", "--dataset-root", type=click.Path(exists=True), required=True, help="path to dataset.")
 @click.option("-a", "--annotation-path", type=click.Path(exists=True), required=True, help="path to dataset.")
 @click.option("-t", "--resume-training", type=click.Path(exists=True), default=None, help="Checkpoint path to resume training from.")
+@click.option("-p", "--point-cloud", type=bool, default=False, help="Whether to perform point cloud classify or not.")
 @click.option("-nc", "--num-classes", type=int, default=51, help="num of classes of dataset.")
 @click.option("-b", "--batch-size", type=int, default=32, help="batch size.")
 @click.option("-f", "--frames-per-clip", type=int, default=16, help="frame per clip.")
@@ -29,6 +30,7 @@ def main(
     dataset_root,
     annotation_path,
     resume_training,
+    point_cloud,
     num_classes,
     batch_size,
     frames_per_clip,
@@ -49,7 +51,7 @@ def main(
     [
         ToTensorVideo(),  # C, T, H, W
         Permute(dims=[1, 0, 2, 3]),  # T, C, H, W
-        RandAugment(magnitude=10, num_layers=2),
+        RandAugment(magnitude=8, num_layers=2),
         Permute(dims=[1, 0, 2, 3]),  # C, T, H, W
         T.Resize(size=(224,224)),
         Normalize(mean=imagenet_mean, std=imagenet_std),
@@ -76,7 +78,7 @@ def main(
     _precomputed_metadata=train_precomputed_metadata,
     frames_per_clip=frames_per_clip,
     step_between_clips=8,
-    frame_sample_rate=4,
+    frame_sample_rate=2,
     train=True,
     output_format="THWC",
     transform=train_transform,
@@ -98,7 +100,7 @@ def main(
         _precomputed_metadata=val_precomputed_metadata,
         frames_per_clip=frames_per_clip,
         step_between_clips=8,
-        frame_sample_rate=4,
+        frame_sample_rate=2,
         train=False,
         output_format="THWC",
         transform=test_transform,
@@ -132,6 +134,7 @@ def main(
         lr=3e-4,
         weight_decay=0.001,
         max_epochs=max_epochs,
+        point_cloud_classify=point_cloud,
     )
     
     checkpointing = pl.callbacks.ModelCheckpoint(dirpath="checkpoints/", filename="{epoch}", monitor="train_loss", mode="min", every_n_train_steps = 50)

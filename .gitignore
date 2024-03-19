@@ -7,6 +7,7 @@ hmdb51.zip
 std_out_26
 err_26
 *.ckpt
+test.py
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

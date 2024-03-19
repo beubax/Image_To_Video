@@ -1,6 +1,7 @@
 from typing import Any, Callable, List, Union
 from vit.utils import load_pretrained_weights
 from vit.vision_transformer import vit_base
+from vit.vision_transformer_point import vit_base as vit_base_point
 import torch
 from torch import nn, optim
 from torchmetrics.functional import accuracy, f1_score
@@ -17,14 +18,20 @@ class VideoLightningModule(pl.LightningModule):
         label_smoothing: float = 0.0,
         dropout: float = 0.0,
         attention_dropout: float = 0.0,
+        point_cloud_classify: bool = False,
         **kwargs,
     ):
         self.save_hyperparameters()
         super().__init__()
         self.num_classes = num_classes
-        self.model = vit_base(
-            num_classes=self.num_classes
-        )
+        if point_cloud_classify:
+            self.model = vit_base_point(
+                num_classes=self.num_classes
+            )
+        else:
+            self.model = vit_base(
+                num_classes=self.num_classes
+            )
 
         self.lr = lr
         self.loss_func = nn.CrossEntropyLoss(label_smoothing=label_smoothing)
@@ -35,9 +42,15 @@ class VideoLightningModule(pl.LightningModule):
             load_pretrained_weights(
                 self.model, model_name="vit_base", patch_size=16)
             
-        for name, param in self.model.named_parameters():
-            if 'temporal' not in name and 'head' not in name:
-                    param.requires_grad = False
+
+        if point_cloud_classify:
+            for name, param in self.model.named_parameters():
+                if 'point_cloud_classify' not in name:
+                        param.requires_grad = False
+        else:
+            for name, param in self.model.named_parameters():
+                if 'temporal' not in name and 'head' not in name:
+                        param.requires_grad = False
             
         self.max_epochs = max_epochs
         self.weight_decay = weight_decay
