@@ -66,14 +66,15 @@ model.eval()
 for batch in train_dataloader:
     video, label = batch
     # print(label)
-    output, spatial_map = model(video.to(torch.device('cuda:0')))
-    visualize_heatmap(spatial_map, video)
+    output = model(video.to(torch.device('cuda:0')))
     print(output.shape)
+    # visualize_heatmap(spatial_map, video)
+    # print(output.shape)
     break
 
-# for name, param in model.named_parameters():
-#    print('{}: {}'.format(name, param.requires_grad))
-# num_param = sum(p.numel() for p in model.parameters() if p.requires_grad)
-# num_total_param = sum(p.numel() for p in model.parameters())
-# print('Number of total parameters: {}, tunable parameters: {}'.format(num_total_param, num_param))
+for name, param in model.named_parameters():
+   print('{}: {}'.format(name, param.requires_grad))
+num_param = sum(p.numel() for p in model.parameters() if p.requires_grad)
+num_total_param = sum(p.numel() for p in model.parameters())
+print('Number of total parameters: {}, tunable parameters: {}'.format(num_total_param, num_param))
     

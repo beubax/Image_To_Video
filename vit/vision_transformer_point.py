@@ -11,7 +11,7 @@ import torch.nn as nn
 from einops import rearrange
 import numpy as np
 import spconv.pytorch as spconv
-
+from torchvision.models.video import r3d_18, R3D_18_Weights
 from vit.utils import trunc_normal_
 
 def drop_path(x, drop_prob: float = 0., training: bool = False):
@@ -229,6 +229,8 @@ class VisionTransformer(nn.Module):
             for i in range(depth)])
         
         self.point_cloud_classify = ExampleNet((16, 224, 224))
+        self.pretrained_video_classifier = r3d_18(weights=None)
+        self.head = nn.Linear(400, num_classes) if num_classes > 0 else nn.Identity()
 
         trunc_normal_(self.pos_embed, std=.02)
         trunc_normal_(self.cls_token, std=.02)
@@ -282,24 +284,27 @@ class VisionTransformer(nn.Module):
     def forward(self, x, register_hook = False):
         B, C, T, H, W = x.shape
         input = x.clone().detach()
-        x = self.prepare_tokens(x)
-        for i, blk in enumerate(self.blocks):
-            if i < len(self.blocks) - 1:
-                x = blk(x, register_hook=register_hook)
-            else:
-                # return spatial_map of the last block
-                x, spatial_map =  blk(x, return_spatial_map=True, register_hook=register_hook)
+        # x = self.prepare_tokens(x)
+        # for i, blk in enumerate(self.blocks):
+        #     if i < len(self.blocks) - 1:
+        #         x = blk(x, register_hook=register_hook)
+        #     else:
+        #         # return spatial_map of the last block
+        #         x, spatial_map =  blk(x, return_spatial_map=True, register_hook=register_hook)
 
-        spatial_map = rearrange(spatial_map, 'n t (h w) -> n t h w', h=14)
-        spatial_map = F.interpolate(spatial_map, scale_factor=(16,16), mode='nearest-exact')
-        # indices = torch.nonzero(spatial_map)
-        indices = torch.nonzero(torch.ones_like(spatial_map))
+        # spatial_map = rearrange(spatial_map, 'n t (h w) -> n t h w', h=14)
+        # spatial_map = F.interpolate(spatial_map, scale_factor=(16,16), mode='nearest-exact')
+        # # indices = torch.nonzero(spatial_map)
+        # indices = torch.nonzero(torch.ones_like(spatial_map))
 
-        x = rearrange(input, 'n c t h w -> n t h w c')  
+        x = rearrange(input, 'n c t h w -> n c t h w')  
 
-        feats = x[indices[:, 0], indices[:, 1], indices[:, 2], indices[:, 3]]
+        x = self.pretrained_video_classifier(x)
+        x = self.head(x)
 
-        x = self.point_cloud_classify(feats, indices.to(torch.int32), B)
+        # feats = x[indices[:, 0], indices[:, 1], indices[:, 2], indices[:, 3]]
+
+        # x = self.point_cloud_classify(feats, indices.to(torch.int32), B)
         return x
 
 

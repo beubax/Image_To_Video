@@ -21,6 +21,7 @@ from lightning_module import VideoLightningModule
 @click.option("-b", "--batch-size", type=int, default=32, help="batch size.")
 @click.option("-f", "--frames-per-clip", type=int, default=16, help="frame per clip.")
 @click.option("-v", "--video-size", type=click.Tuple([int, int]), default=(224, 224), help="frame per clip.")
+@click.option("--testing", type=bool, default=False, help="To test functionality.")
 @click.option("--max-epochs", type=int, default=50, help="max epochs.")
 @click.option("--num-workers", type=int, default=4)
 @click.option("--fast-dev-run", type=bool, is_flag=True, show_default=True, default=False)
@@ -35,6 +36,7 @@ def main(
     batch_size,
     frames_per_clip,
     video_size,
+    testing,
     max_epochs,
     num_workers,
     fast_dev_run,
@@ -135,6 +137,7 @@ def main(
         weight_decay=0.001,
         max_epochs=max_epochs,
         point_cloud_classify=point_cloud,
+        testing=testing,
     )
     
     checkpointing = pl.callbacks.ModelCheckpoint(dirpath="checkpoints/", filename="{epoch}", monitor="train_loss", mode="min", every_n_train_steps = 50)

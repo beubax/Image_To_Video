@@ -19,6 +19,7 @@ class VideoLightningModule(pl.LightningModule):
         dropout: float = 0.0,
         attention_dropout: float = 0.0,
         point_cloud_classify: bool = False,
+        testing: bool = False,
         **kwargs,
     ):
         self.save_hyperparameters()
@@ -46,6 +47,10 @@ class VideoLightningModule(pl.LightningModule):
         if point_cloud_classify:
             for name, param in self.model.named_parameters():
                 if 'point_cloud_classify' not in name:
+                        param.requires_grad = False
+        elif testing:
+            for name, param in self.model.named_parameters():
+                if 'pretrained_video_classifier' not in name and 'head' not in name:
                         param.requires_grad = False
         else:
             for name, param in self.model.named_parameters():
