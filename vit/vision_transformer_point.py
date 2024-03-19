@@ -283,7 +283,7 @@ class VisionTransformer(nn.Module):
 
     def forward(self, x, register_hook = False):
         B, C, T, H, W = x.shape
-        input = x.clone().detach()
+        input = x.clone()
         # x = self.prepare_tokens(x)
         # for i, blk in enumerate(self.blocks):
         #     if i < len(self.blocks) - 1:
