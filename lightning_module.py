@@ -29,6 +29,10 @@ class VideoLightningModule(pl.LightningModule):
             self.model = vit_base_point(
                 num_classes=self.num_classes
             )
+        elif testing:
+             self.model = vit_base_point(
+                num_classes=self.num_classes
+            )
         else:
             self.model = vit_base(
                 num_classes=self.num_classes

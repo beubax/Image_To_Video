@@ -283,7 +283,7 @@ class VisionTransformer(nn.Module):
 
     def forward(self, x, register_hook = False):
         B, C, T, H, W = x.shape
-        input = x.clone()
+        input = x.clone().detach()
         # x = self.prepare_tokens(x)
         # for i, blk in enumerate(self.blocks):
         #     if i < len(self.blocks) - 1:
@@ -297,7 +297,7 @@ class VisionTransformer(nn.Module):
         # # indices = torch.nonzero(spatial_map)
         # indices = torch.nonzero(torch.ones_like(spatial_map))
 
-        x = rearrange(x, 'n c t h w -> n c t h w')  
+        x = rearrange(input, 'n c t h w -> n c t h w')  
 
         x = self.pretrained_video_classifier(x)
         x = self.head(x)
