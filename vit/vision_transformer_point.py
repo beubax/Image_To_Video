@@ -292,7 +292,8 @@ class VisionTransformer(nn.Module):
 
         spatial_map = rearrange(spatial_map, 'n t (h w) -> n t h w', h=14)
         spatial_map = F.interpolate(spatial_map, scale_factor=(16,16), mode='nearest-exact')
-        indices = torch.nonzero(spatial_map)
+        # indices = torch.nonzero(spatial_map)
+        indices = torch.nonzero(torch.ones_like(spatial_map))
 
         x = rearrange(input, 'n c t h w -> n t h w c')  
 
