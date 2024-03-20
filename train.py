@@ -147,7 +147,7 @@ def main(
     trainer = pl.Trainer(
         benchmark=True,
         check_val_every_n_epoch=4,
-        accumulate_grad_batches=4,
+        accumulate_grad_batches=2,
         max_epochs=max_epochs,
         devices=-1,
         accelerator="auto",
