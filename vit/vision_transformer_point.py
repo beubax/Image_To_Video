@@ -229,7 +229,8 @@ class VisionTransformer(nn.Module):
             for i in range(depth)])
         
         self.point_cloud_classify = ExampleNet((16, 224, 224))
-        self.pretrained_video_classifier = r3d_18(weights=None)
+        weights = R3D_18_Weights.DEFAULT
+        self.pretrained_video_classifier = r3d_18(weights=weights)
         self.head = nn.Linear(400, num_classes) if num_classes > 0 else nn.Identity()
 
         trunc_normal_(self.pos_embed, std=.02)
