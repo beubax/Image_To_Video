@@ -53,7 +53,7 @@ def main(
     [
         ToTensorVideo(),  # C, T, H, W
         Permute(dims=[1, 0, 2, 3]),  # T, C, H, W
-        RandAugment(magnitude=10, num_layers=2),
+        RandAugment(magnitude=12, num_layers=3),
         Permute(dims=[1, 0, 2, 3]),  # C, T, H, W
         T.Resize(size=(224,224)),
         Normalize(mean=imagenet_mean, std=imagenet_std),
