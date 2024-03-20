@@ -53,7 +53,7 @@ def main(
     [
         ToTensorVideo(),  # C, T, H, W
         Permute(dims=[1, 0, 2, 3]),  # T, C, H, W
-        RandAugment(magnitude=0, num_layers=2),
+        RandAugment(magnitude=8, num_layers=2),
         Permute(dims=[1, 0, 2, 3]),  # C, T, H, W
         T.Resize(size=(224,224)),
         Normalize(mean=imagenet_mean, std=imagenet_std),
@@ -133,7 +133,7 @@ def main(
 
     model = VideoLightningModule(
         num_classes=num_classes,
-        lr=0.01,
+        lr=3e-4,
         weight_decay=0.001,
         max_epochs=max_epochs,
         point_cloud_classify=point_cloud,
@@ -156,7 +156,7 @@ def main(
         callbacks=callbacks,
     )
     trainer.fit(model, train_dataloaders=train_dataloader, val_dataloaders=val_dataloader, ckpt_path=resume_training)
-    trainer.save_checkpoint("./vvit_hdmb51.ckpt")
+    trainer.save_checkpoint("./vvit_hmdb51.ckpt")
 
 
 if __name__ == "__main__":

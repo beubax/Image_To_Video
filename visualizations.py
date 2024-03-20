@@ -2,6 +2,7 @@
 Vis utilities. Code adapted from LOST: https://github.com/valeoai/LOST
 """
 import cv2
+from einops import rearrange
 import torch
 import skimage.io
 import numpy as np
@@ -126,3 +127,23 @@ def visualize_heatmap(eigvec, frames, scales=[16,16], dims=(14, 14)):
         cv2.imwrite(pltname, fin)
 
         print(f"Heatmap saved at {pltname}.")
+
+def visualize_point_cloud(video, indices):
+    video = inverse_normalize(video, mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225))
+    video = torch.stack(video).unsqueeze(0)
+    video = rearrange(video, 'n t c h w -> n t h w c') 
+    indices = indices.cpu()
+    feats = video[indices[:, 0], indices[:, 1], indices[:, 2], indices[:, 3]]
+    indices = rearrange(indices, 'n (b x y z) -> n (b z x y)', b=1, x=1, z = 1)
+    points = indices[:, 1:].numpy()
+    colors = feats.numpy()
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
+    
+    ax.scatter(points[:, 0], points[:, 1], points[:, 2], c=colors/255.0, marker='.')
+    
+    ax.set_xlabel('X')
+    ax.set_ylabel('Y')
+    ax.set_zlabel('Z')
+    
+    plt.show()

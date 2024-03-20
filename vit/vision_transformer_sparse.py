@@ -11,7 +11,7 @@ import torch.nn as nn
 from einops import rearrange
 import numpy as np
 import spconv.pytorch as spconv
-from torchvision.models.video import r3d_18, R3D_18_Weights
+
 from vit.utils import trunc_normal_
 
 def drop_path(x, drop_prob: float = 0., training: bool = False):
@@ -118,7 +118,9 @@ class Spatial_Weighting(nn.Module):
         bipartition = torch.gt(eigenvec , 0)
         bipartition = torch.where(avg > 0,bipartition, torch.logical_not(bipartition)) 
         bipartition = bipartition.to(torch.float)
-        return bipartition
+        eigenvec = torch.abs(torch.mul(eigenvec, bipartition))
+        eigenvec = self.softmax(eigenvec)
+        return eigenvec
 
 
 class Block(nn.Module):
@@ -144,6 +146,32 @@ class Block(nn.Module):
             spatial_map = self.spatial_weighting(qkv)
             return x, spatial_map
         return x
+    
+class LinearClassifier(nn.Module):
+    """Linear layer to train on top of frozen features"""
+    def __init__(self, dim, num_labels=1000):
+        super().__init__()
+        self.num_labels = num_labels
+        self.linear = nn.Linear(dim, num_labels)
+        self.linear.weight.data.normal_(mean=0.0, std=0.01)
+        self.linear.bias.data.zero_()
+
+    def forward(self, x):
+        # linear layer
+        return self.linear(x)
+    
+class ExampleNet(nn.Module):
+    def __init__(self, shape):
+        super().__init__()
+        self.net = spconv.SparseSequential(
+            spconv.SparseConv3d(768, 768, kernel_size=(2,3,3), padding=(0,0,0), stride=(2,3,3)),
+            spconv.ToDense(), # convert spconv tensor to dense and convert it to NCHW format.
+        )
+        self.shape = shape
+
+    def forward(self, features, coors, batch_size):
+        x = spconv.SparseConvTensor(features, coors, self.shape, batch_size)
+        return self.net(x)# .dense()
 
 
 class PatchEmbed(nn.Module):
@@ -162,47 +190,6 @@ class PatchEmbed(nn.Module):
         B, C, H, W = x.shape
         x = self.proj(x).flatten(2).transpose(1, 2)
         return x
-    
-class ExampleNet(nn.Module):
-    def __init__(self, shape):
-        super().__init__()
-        self.net = spconv.SparseSequential(
-            spconv.SparseConv3d(3, 64, kernel_size=(3,3,3), padding=(1,1,1)), 
-            nn.ReLU(),
-            spconv.SparseMaxPool3d(kernel_size=(1,2,2), stride=(1,2,2)), 
-            
-            spconv.SparseConv3d(64, 128, kernel_size=(3,3,3), padding=(1,1,1)), 
-            nn.ReLU(),
-            spconv.SparseMaxPool3d(kernel_size=(2,2,2), stride=(2,2,2)), 
-
-            spconv.SparseConv3d(128, 256, kernel_size=(3,3,3), padding=(1,1,1)), 
-            nn.ReLU(),
-            spconv.SparseConv3d(256, 256, kernel_size=(3,3,3), padding=(1,1,1)), 
-            nn.ReLU(),
-            spconv.SparseMaxPool3d(kernel_size=(2,2,2), stride=(2,2,2)), 
-
-            spconv.SparseConv3d(256, 512, kernel_size=(3,3,3), padding=(1,1,1)), 
-            nn.ReLU(),
-            spconv.SparseConv3d(512, 512, kernel_size=(3,3,3), padding=(1,1,1)), 
-            nn.ReLU(),
-            spconv.SparseMaxPool3d(kernel_size=(2,2,2), stride=(2,2,2)),
-
-            spconv.SparseConv3d(512, 512, kernel_size=(3,3,3), padding=(1,1,1)), 
-            nn.ReLU(),
-            spconv.SparseConv3d(512, 512, kernel_size=(3,3,3), padding=(1,1,1)), 
-            nn.ReLU(),
-            spconv.SparseMaxPool3d(kernel_size=(2,2,2), stride=(2,2,2)),
-
-            spconv.ToDense(), # convert spconv tensor to dense and convert it to NCHW format.
-            nn.AdaptiveAvgPool3d(output_size=(1, 1, 1)),
-            nn.Flatten(),
-            nn.Linear(512, 51)
-        )
-        self.shape = shape
-
-    def forward(self, features, coors, batch_size):
-        x = spconv.SparseConvTensor(features, coors, self.shape, batch_size)
-        return self.net(x)# .dense()
 
 
 class VisionTransformer(nn.Module):
@@ -219,19 +206,26 @@ class VisionTransformer(nn.Module):
 
         self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
         self.pos_embed = nn.Parameter(torch.zeros(1, num_patches + 1, embed_dim))
+        self.temporal_embedding = nn.Parameter(torch.zeros(1, self.num_frames, embed_dim))
         self.pos_drop = nn.Dropout(p=drop_rate)
         
+        # self.temporal_norm = nn.LayerNorm()
         dpr = [x.item() for x in torch.linspace(0, drop_path_rate, depth)]  # stochastic depth decay rule
         self.blocks = nn.ModuleList([
             Block(
                 dim=embed_dim, num_heads=num_heads, mlp_ratio=mlp_ratio, qkv_bias=qkv_bias, qk_scale=qk_scale,
                 drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[i], norm_layer=norm_layer)
             for i in range(depth)])
-        
-        self.point_cloud_classify = ExampleNet((16, 224, 224))
-        # weights = R3D_18_Weights.DEFAULT
-        # self.pretrained_video_classifier = r3d_18(weights=weights)
-        # self.head = nn.Linear(400, num_classes) if num_classes > 0 else nn.Identity()
+        self.temporal_blocks = nn.ModuleList([
+            Block(
+                dim=embed_dim, num_heads=num_heads, mlp_ratio=mlp_ratio, qkv_bias=qkv_bias, qk_scale=qk_scale,
+                drop=drop_rate, num_frames = self.num_frames, attn_drop=attn_drop_rate, drop_path=dpr[i], norm_layer=norm_layer)
+            for i in range(temporal_depth)])
+        # self.norm = norm_layer(embed_dim)
+        self.temporal_norm = norm_layer(embed_dim)
+        self.point_cloud_tokenize = ExampleNet((16, 14, 14))
+        # Classifier head
+        self.head = LinearClassifier(embed_dim, num_classes) if num_classes > 0 else nn.Identity()
 
         trunc_normal_(self.pos_embed, std=.02)
         trunc_normal_(self.cls_token, std=.02)
@@ -280,11 +274,15 @@ class VisionTransformer(nn.Module):
         # add positional encoding to each token
         x = x + self.interpolate_pos_encoding(x, W, H)
 
+        n = x.shape[1]
+        x = rearrange(x, '(b t) n d -> (b n) t d', t=self.num_frames)
+        x = x + self.temporal_embedding
+        x = rearrange(x, '(b n) t d -> (b t) n d', n=n)
+
         return self.pos_drop(x)
 
     def forward(self, x, register_hook = False):
         B, C, T, H, W = x.shape
-        input = x.clone().detach()
         x = self.prepare_tokens(x)
         for i, blk in enumerate(self.blocks):
             if i < len(self.blocks) - 1:
@@ -293,19 +291,22 @@ class VisionTransformer(nn.Module):
                 # return spatial_map of the last block
                 x, spatial_map =  blk(x, return_spatial_map=True, register_hook=register_hook)
 
+        spatial_map = spatial_map.unsqueeze(3)
+        x = rearrange(x, '(b t) n d -> b t n d', t=self.num_frames)
+        x = torch.einsum('ijkl,ijkp->ijkp', spatial_map, x)
+        x = rearrange(x, 'n t (h w) c -> n t h w c', h=14)  
+        spatial_map = spatial_map.squeeze(3)
         spatial_map = rearrange(spatial_map, 'n t (h w) -> n t h w', h=14)
-        spatial_map = F.interpolate(spatial_map, scale_factor=(16,16), mode='nearest-exact')
         indices = torch.nonzero(spatial_map)
-        # indices = torch.nonzero(torch.ones_like(spatial_map))
+        feats = x[indices[:, 0], indices[:, 1], indices[:, 2], indices[:, 3]]
+        x = self.point_cloud_tokenize(feats, indices.to(torch.int32), B)
+        x = rearrange(x, 'b c t h w -> b (t h w) c')
+        for i, blk in enumerate(self.temporal_blocks):
+            x = blk(x, register_hook=register_hook)
 
-        # x = rearrange(input, 'n c t h w -> n c t h w')  
-
-        # x = self.pretrained_video_classifier(x)
-        # x = self.head(x)
-
-        # feats = x[indices[:, 0], indices[:, 1], indices[:, 2], indices[:, 3]]
-
-        # x = self.point_cloud_classify(feats, indices.to(torch.int32), B)
+        x = self.temporal_norm(x)
+        x = torch.mean(x, dim=1)
+        x = self.head(x)
         return x
 
 
