@@ -64,7 +64,7 @@ def main(
         frames_per_clip=frames_per_clip,
         step_between_clips=8,
         frame_sample_rate=2,
-        train=False,
+        train=True,
         output_format="THWC",
         transform=test_transform,
     )
