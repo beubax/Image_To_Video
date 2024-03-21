@@ -81,11 +81,8 @@ def main(
         drop_last=True,
     )
 
-    x, y = next(iter(val_dataloader))
-    print(x.shape)
-
     model = VideoLightningModule.load_from_checkpoint(model_path)
-
+    print("Success")
     trainer = pl.Trainer(accelerator="auto", default_root_dir="lightning_predict_logs")
     predictions = trainer.predict(model, dataloaders=val_dataloader)
 
