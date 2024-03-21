@@ -20,6 +20,11 @@ __all__ = [
     "flow_to_image",
 ]
 
+def find_classes(dir):
+    classes = os.listdir(dir)
+    classes.sort()
+    class_to_idx = {classes[i]: i for i in range(len(classes))}
+    return classes, class_to_idx
 
 @torch.no_grad()
 def make_grid(

@@ -44,6 +44,8 @@ train_set = HMDB51(
     output_format="THWC",
     transform=train_transform,
 )
+
+
 if not os.path.exists(train_metadata_file):
     with open(train_metadata_file, "wb") as f:
         pickle.dump(train_set.metadata, f, protocol=pickle.HIGHEST_PROTOCOL)
@@ -58,10 +60,9 @@ train_dataloader = DataLoader(
         pin_memory=True,
     )
 
-
-model = vit_base(num_classes=51).to(torch.device('cuda:0'))
-load_pretrained_weights(model, model_name="vit_base", patch_size=16)
-model.eval()
+# model = vit_base(num_classes=51).to(torch.device('cuda:0'))
+# load_pretrained_weights(model, model_name="vit_base", patch_size=16)
+# model.eval()
 
 # for batch in train_dataloader:
 #     video, label = batch
@@ -72,9 +73,9 @@ model.eval()
 #     # print(output.shape)
 #     break
 
-for name, param in model.named_parameters():
-   print('{}: {}'.format(name, param.requires_grad))
-num_param = sum(p.numel() for p in model.parameters() if p.requires_grad)
-num_total_param = sum(p.numel() for p in model.parameters())
-print('Number of total parameters: {}, tunable parameters: {}'.format(num_total_param, num_param))
+# for name, param in model.named_parameters():
+#    print('{}: {}'.format(name, param.requires_grad))
+# num_param = sum(p.numel() for p in model.parameters() if p.requires_grad)
+# num_total_param = sum(p.numel() for p in model.parameters())
+# print('Number of total parameters: {}, tunable parameters: {}'.format(num_total_param, num_param))
     
