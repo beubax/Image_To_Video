@@ -11,6 +11,7 @@ from vit.vision_transformer_sparse import vit_base
 from torchvision.transforms._transforms_video import ToTensorVideo
 from pytorchvideo.transforms import Normalize, Permute, RandAugment, AugMix
 from torchvision.transforms import transforms as T
+from torchvision.datasets import Kinetics
 
 
 imagenet_mean = [0.485, 0.456, 0.406]
@@ -27,38 +28,25 @@ train_transform = T.Compose(
     ]
 )
 
-train_metadata_file = "hmdb51-train-meta.pickle"
-train_precomputed_metadata = None
-if os.path.exists(train_metadata_file):
-    with open(train_metadata_file, "rb") as f:
-        train_precomputed_metadata = pickle.load(f)
+# train_metadata_file = "kinetics-train-meta.pickle"
+# train_precomputed_metadata = None
+# if os.path.exists(train_metadata_file):
+#     with open(train_metadata_file, "rb") as f:
+#         train_precomputed_metadata = pickle.load(f)
 
-train_set = HMDB51(
-    root="hmdb51",
-    annotation_path="annotations",
-    _precomputed_metadata=train_precomputed_metadata,
+train_set = Kinetics(
+    root="kinetics",
     frames_per_clip=16,
     step_between_clips=8,
-    frame_sample_rate=4,
-    train=True,
+    download=True,
     output_format="THWC",
     transform=train_transform,
 )
 
 
-if not os.path.exists(train_metadata_file):
-    with open(train_metadata_file, "wb") as f:
-        pickle.dump(train_set.metadata, f, protocol=pickle.HIGHEST_PROTOCOL)
-
-
-train_dataloader = DataLoader(
-        train_set,
-        batch_size=1,
-        num_workers=1,
-        shuffle=True,
-        drop_last=True,
-        pin_memory=True,
-    )
+# if not os.path.exists(train_metadata_file):
+#     with open(train_metadata_file, "wb") as f:
+#         pickle.dump(train_set.metadata, f, protocol=pickle.HIGHEST_PROTOCOL)
 
 # model = vit_base(num_classes=51).to(torch.device('cuda:0'))
 # load_pretrained_weights(model, model_name="vit_base", patch_size=16)
