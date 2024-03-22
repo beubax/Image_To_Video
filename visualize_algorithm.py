@@ -2,7 +2,7 @@ import os
 import pickle
 import torch
 from torchvision import transforms as t
-import torchshow as ts
+# import torchshow as ts
 from torch.utils.data import DataLoader
 from dataset.hmdb51 import HMDB51
 from visualizations import visualize_heatmap, visualize_point_cloud
