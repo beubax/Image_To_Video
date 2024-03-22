@@ -1,5 +1,5 @@
-# import os
-# import pickle
+import os
+import pickle
 # import torch
 from torchvision import transforms as t
 # import torchshow as ts
@@ -28,25 +28,25 @@ train_transform = T.Compose(
     ]
 )
 
-# train_metadata_file = "kinetics-train-meta.pickle"
-# train_precomputed_metadata = None
-# if os.path.exists(train_metadata_file):
-#     with open(train_metadata_file, "rb") as f:
-#         train_precomputed_metadata = pickle.load(f)
+train_metadata_file = "kinetics-train-meta.pickle"
+train_precomputed_metadata = None
+if os.path.exists(train_metadata_file):
+    with open(train_metadata_file, "rb") as f:
+        train_precomputed_metadata = pickle.load(f)
 
 train_set = Kinetics(
     root="kinetics",
     frames_per_clip=16,
     step_between_clips=8,
-    download=True,
+    download=False,
     output_format="THWC",
     transform=train_transform,
 )
 
 
-# if not os.path.exists(train_metadata_file):
-#     with open(train_metadata_file, "wb") as f:
-#         pickle.dump(train_set.metadata, f, protocol=pickle.HIGHEST_PROTOCOL)
+if not os.path.exists(train_metadata_file):
+    with open(train_metadata_file, "wb") as f:
+        pickle.dump(train_set.metadata, f, protocol=pickle.HIGHEST_PROTOCOL)
 
 # model = vit_base(num_classes=51).to(torch.device('cuda:0'))
 # load_pretrained_weights(model, model_name="vit_base", patch_size=16)
