@@ -1,13 +1,13 @@
-import os
-import pickle
-import torch
+# import os
+# import pickle
+# import torch
 from torchvision import transforms as t
 # import torchshow as ts
-from torch.utils.data import DataLoader
-from dataset.hmdb51 import HMDB51
-from visualizations import visualize_heatmap, visualize_point_cloud
-from vit.utils import load_pretrained_weights
-from vit.vision_transformer_sparse import vit_base
+# from torch.utils.data import DataLoader
+# from dataset.hmdb51 import HMDB51
+# from visualizations import visualize_heatmap, visualize_point_cloud
+# from vit.utils import load_pretrained_weights
+# from vit.vision_transformer_sparse import vit_base
 from torchvision.transforms._transforms_video import ToTensorVideo
 from pytorchvideo.transforms import Normalize, Permute, RandAugment, AugMix
 from torchvision.transforms import transforms as T
