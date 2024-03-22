@@ -499,6 +499,13 @@ def accuracy(output, target, topk=(1,)):
     return [correct[:k].reshape(-1).float().sum(0) * 100. / batch_size for k in topk]
 
 
+def create_mask(size, block_size):
+    mask = torch.zeros(size, size)
+    num_blocks = size // block_size
+    for i in range(num_blocks):
+        mask[i*block_size:(i+1)*block_size, i*block_size:(i+1)*block_size] = 1
+    return mask == 1
+
 def _no_grad_trunc_normal_(tensor, mean, std, a, b):
     # Cut & paste from PyTorch official master until it's in a few official releases - RW
     # Method based on https://people.sc.fsu.edu/~jburkardt/presentations/truncated_normal.pdf

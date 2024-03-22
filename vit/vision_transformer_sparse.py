@@ -12,7 +12,7 @@ from einops import rearrange
 import numpy as np
 import spconv.pytorch as spconv
 
-from vit.utils import trunc_normal_
+from vit.utils import create_mask, trunc_normal_
 
 def drop_path(x, drop_prob: float = 0., training: bool = False):
     if drop_prob == 0. or not training:
@@ -56,12 +56,12 @@ class Mlp(nn.Module):
 
 
 class Attention(nn.Module):
-    def __init__(self, dim, num_heads=8, qkv_bias=False, qk_scale=None, attn_drop=0., proj_drop=0.):
+    def __init__(self, dim, num_heads=8, qkv_bias=False, qk_scale=None, attn_drop=0., proj_drop=0., temporal_attn_mask=None):
         super().__init__()
         self.num_heads = num_heads
         head_dim = dim // num_heads
         self.scale = qk_scale or head_dim ** -0.5
-
+        self.temporal_attn_mask = temporal_attn_mask
         self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
         self.attn_drop = nn.Dropout(attn_drop)
         self.proj = nn.Linear(dim, dim)
@@ -87,6 +87,9 @@ class Attention(nn.Module):
         q, k, v = qkv[0], qkv[1], qkv[2]
 
         attn = (q @ k.transpose(-2, -1)) * self.scale
+        if self.temporal_attn_mask is not None:
+            attn[self.temporal_attn_mask.expand_as(attn)] = float('-inf')
+
         attn = attn.softmax(dim=-1)
         attn = self.attn_drop(attn)
 
@@ -125,11 +128,11 @@ class Spatial_Weighting(nn.Module):
 
 class Block(nn.Module):
     def __init__(self, dim, num_heads, mlp_ratio=4., qkv_bias=False, qk_scale=None, drop=0., attn_drop=0.,
-                 drop_path=0., num_frames = 16, act_layer=nn.GELU, norm_layer=nn.LayerNorm):
+                 drop_path=0., num_frames = 16, act_layer=nn.GELU, norm_layer=nn.LayerNorm, temporal_attn_mask=None):
         super().__init__()
         self.norm1 = norm_layer(dim)
         self.attn = Attention(
-            dim, num_heads=num_heads, qkv_bias=qkv_bias, qk_scale=qk_scale, attn_drop=attn_drop, proj_drop=drop)
+            dim, num_heads=num_heads, qkv_bias=qkv_bias, qk_scale=qk_scale, attn_drop=attn_drop, proj_drop=drop, temporal_attn_mask=temporal_attn_mask)
         self.spatial_weighting = Spatial_Weighting(num_frames)
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
         self.norm2 = norm_layer(dim)
@@ -174,10 +177,11 @@ class LinearClassifier(nn.Module):
 #         return self.net(x)# .dense()
     
 class ExampleNet(nn.Module):
-    def __init__(self):
+    def __init__(self, temporal_embed_dim):
         super().__init__()
+        self.temporal_embed_dim = temporal_embed_dim
         self.net = nn.Sequential(
-            nn.Conv3d(768, 768, kernel_size=(2,3,3), padding=(0,0,0), stride=(2,3,3)),
+            nn.Conv3d(768, self.temporal_embed_dim, kernel_size=(2,3,3), padding=(0,0,0), stride=(2,3,3)),
         )
 
     def forward(self, x):
@@ -206,7 +210,7 @@ class VisionTransformer(nn.Module):
     """ Vision Transformer """
     def __init__(self, img_size=[224], patch_size=16, in_chans=3, num_classes=0, embed_dim=768, depth=12,
                  num_heads=12, mlp_ratio=4., temporal_depth=1, qkv_bias=False, qk_scale=None, drop_rate=0., attn_drop_rate=0.,
-                 drop_path_rate=0., num_frames = 16, norm_layer=nn.LayerNorm, **kwargs):
+                 drop_path_rate=0., num_frames = 16, norm_layer=nn.LayerNorm, temporal_embed_dim = 512, temporal_num_heads = 8, **kwargs):
         super().__init__()
         self.num_features = self.embed_dim = embed_dim
         self.num_frames = num_frames
@@ -218,25 +222,25 @@ class VisionTransformer(nn.Module):
         self.pos_embed = nn.Parameter(torch.zeros(1, num_patches + 1, embed_dim))
         self.temporal_embedding = nn.Parameter(torch.zeros(1, self.num_frames, embed_dim))
         self.pos_drop = nn.Dropout(p=drop_rate)
-        
+        self.temporal_attn_mask = create_mask(size=128, block_size=16)
         # self.temporal_norm = nn.LayerNorm()
         dpr = [x.item() for x in torch.linspace(0, drop_path_rate, depth)]  # stochastic depth decay rule
         self.blocks = nn.ModuleList([
             Block(
                 dim=embed_dim, num_heads=num_heads, mlp_ratio=mlp_ratio, qkv_bias=qkv_bias, qk_scale=qk_scale,
-                drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[i], norm_layer=norm_layer)
+                drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[i], norm_layer=norm_layer, temporal_attn_mask=None)
             for i in range(depth)])
         self.temporal_blocks = nn.ModuleList([
             Block(
-                dim=embed_dim, num_heads=num_heads, mlp_ratio=mlp_ratio, qkv_bias=qkv_bias, qk_scale=qk_scale,
-                drop=drop_rate, num_frames = self.num_frames, attn_drop=attn_drop_rate, drop_path=dpr[i], norm_layer=norm_layer)
+                dim=temporal_embed_dim, num_heads=temporal_num_heads, mlp_ratio=mlp_ratio, qkv_bias=qkv_bias, qk_scale=qk_scale,
+                drop=drop_rate, num_frames = self.num_frames, attn_drop=attn_drop_rate, drop_path=dpr[i], norm_layer=norm_layer, temporal_attn_mask=self.temporal_attn_mask)
             for i in range(temporal_depth)])
         # self.norm = norm_layer(embed_dim)
-        self.temporal_norm = norm_layer(embed_dim)
+        self.temporal_norm = norm_layer(temporal_embed_dim)
         # self.point_cloud_tokenize = ExampleNet((16, 14, 14))
-        self.point_cloud_tokenize = ExampleNet()
+        self.point_cloud_tokenize = ExampleNet(temporal_embed_dim)
         # Classifier head
-        self.head = LinearClassifier(embed_dim, num_classes) if num_classes > 0 else nn.Identity()
+        self.head = LinearClassifier(temporal_embed_dim, num_classes) if num_classes > 0 else nn.Identity()
 
         trunc_normal_(self.pos_embed, std=.02)
         trunc_normal_(self.cls_token, std=.02)

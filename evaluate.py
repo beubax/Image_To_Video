@@ -51,7 +51,7 @@ def main(
         ]
     )
 
-    val_metadata_file = "hmdb51-train-meta.pickle"
+    val_metadata_file = "hmdb51-val-meta.pickle"
     val_precomputed_metadata = None
     if os.path.exists(val_metadata_file):
         with open(val_metadata_file, "rb") as f:
