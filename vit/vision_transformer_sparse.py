@@ -306,9 +306,9 @@ class VisionTransformer(nn.Module):
                 # return spatial_map of the last block
                 x, spatial_map =  blk(x, return_spatial_map=True, register_hook=register_hook)
 
-        spatial_map = spatial_map.unsqueeze(3)
+        # spatial_map = spatial_map.unsqueeze(3)
         x = rearrange(x, '(b t) n d -> b t n d', t=self.num_frames)
-        x = torch.einsum('ijkl,ijkp->ijkp', spatial_map, x)
+        # x = torch.einsum('ijkl,ijkp->ijkp', spatial_map, x)
         x = rearrange(x, 'n t (h w) c -> n c t h w', h=14)
         # x = rearrange(x, 'n t (h w) c -> n t h w c', h=14)  
         # spatial_map = spatial_map.squeeze(3)
