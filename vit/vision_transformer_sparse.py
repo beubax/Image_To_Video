@@ -321,6 +321,7 @@ class VisionTransformer(nn.Module):
         sparse_tensor = SparseTensor(coords=indices.to(torch.int32), feats=feats)
         x = self.point_cloud_tokenize(sparse_tensor)
         x = torch.sparse_coo_tensor(indices=x.coords.permute(1,0), values=x.feats)
+        print(x)
         x = x.to_dense()
         x = rearrange(x, 'b t h w c -> b (t h w) c')
         for i, blk in enumerate(self.temporal_blocks):
