@@ -281,6 +281,7 @@ class VisionTransformer(nn.Module):
 
     def prepare_tokens(self, x):
         B, C, T, H, W = x.shape
+        print(x.shape)
         x = rearrange(x, 'b c t h w -> (b t) c h w')
         x = self.patch_embed(x)  # patch linear embedding
 
