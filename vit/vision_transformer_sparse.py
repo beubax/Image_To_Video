@@ -11,6 +11,10 @@ import torch.nn as nn
 from einops import rearrange
 import numpy as np
 import spconv.pytorch as spconv
+import torchsparse
+from torchsparse import SparseTensor
+from torchsparse import nn as spnn
+from torchsparse.nn import functional as F
 
 from vit.utils import create_mask, trunc_normal_
 
@@ -122,6 +126,7 @@ class Spatial_Weighting(nn.Module):
         bipartition = torch.where(avg > 0,bipartition, torch.logical_not(bipartition)) 
         bipartition = bipartition.to(torch.float)
         eigenvec = torch.abs(torch.mul(eigenvec, bipartition))
+        eigenvec[eigenvec == 0] = float("-inf")
         eigenvec = self.softmax(eigenvec)
         return eigenvec
 
@@ -163,29 +168,27 @@ class LinearClassifier(nn.Module):
         # linear layer
         return self.linear(x)
     
-# class ExampleNet(nn.Module):
-#     def __init__(self, shape):
-#         super().__init__()
-#         self.net = spconv.SparseSequential(
-#             spconv.SparseConv3d(768, 768, kernel_size=(2,3,3), padding=(0,0,0), stride=(2,3,3)),
-#             spconv.ToDense(), # convert spconv tensor to dense and convert it to NCHW format.
-#         )
-#         self.shape = shape
-
-#     def forward(self, features, coors, batch_size):
-#         x = spconv.SparseConvTensor(features, coors, self.shape, batch_size)
-#         return self.net(x)# .dense()
-    
 class ExampleNet(nn.Module):
     def __init__(self, temporal_embed_dim):
         super().__init__()
         self.temporal_embed_dim = temporal_embed_dim
-        self.net = nn.Sequential(
-            nn.Conv3d(768, self.temporal_embed_dim, kernel_size=(2,3,3), padding=(0,0,0), stride=(2,3,3)),
-        )
+        self.model = nn.Sequential(
+        spnn.Conv3d(768, self.temporal_embed_dim, kernel_size=(2,3,3), padding=(0,0,0), stride=(2,3,3)),
+    )
 
     def forward(self, x):
-        return self.net(x)# .dense()
+        return self.model(x)# .dense()
+    
+# class ExampleNet(nn.Module):
+#     def __init__(self, temporal_embed_dim):
+#         super().__init__()
+#         self.temporal_embed_dim = temporal_embed_dim
+#         self.net = nn.Sequential(
+#             nn.Conv3d(768, self.temporal_embed_dim, kernel_size=(2,3,3), padding=(0,0,0), stride=(2,3,3)),
+#         )
+
+#     def forward(self, x):
+#         return self.net(x)# .dense()
 
 
 class PatchEmbed(nn.Module):
@@ -237,7 +240,6 @@ class VisionTransformer(nn.Module):
             for i in range(temporal_depth)])
         # self.norm = norm_layer(embed_dim)
         self.temporal_norm = norm_layer(temporal_embed_dim)
-        # self.point_cloud_tokenize = ExampleNet((16, 14, 14))
         self.point_cloud_tokenize = ExampleNet(temporal_embed_dim)
         # Classifier head
         self.head = LinearClassifier(temporal_embed_dim, num_classes) if num_classes > 0 else nn.Identity()
@@ -306,18 +308,20 @@ class VisionTransformer(nn.Module):
                 # return spatial_map of the last block
                 x, spatial_map =  blk(x, return_spatial_map=True, register_hook=register_hook)
 
-        # spatial_map = spatial_map.unsqueeze(3)
+        spatial_map = spatial_map.unsqueeze(3)
         x = rearrange(x, '(b t) n d -> b t n d', t=self.num_frames)
-        # x = torch.einsum('ijkl,ijkp->ijkp', spatial_map, x)
-        x = rearrange(x, 'n t (h w) c -> n c t h w', h=14)
-        # x = rearrange(x, 'n t (h w) c -> n t h w c', h=14)  
-        # spatial_map = spatial_map.squeeze(3)
-        # spatial_map = rearrange(spatial_map, 'n t (h w) -> n t h w', h=14)
-        # indices = torch.nonzero(spatial_map)
-        # feats = x[indices[:, 0], indices[:, 1], indices[:, 2], indices[:, 3]]
-        # x = self.point_cloud_tokenize(feats, indices.to(torch.int32), B)
-        x = self.point_cloud_tokenize(x)
-        x = rearrange(x, 'b c t h w -> b (t h w) c')
+        x = torch.einsum('ijkl,ijkp->ijkp', spatial_map, x)
+        # x = rearrange(x, 'n t (h w) c -> n c t h w', h=14)
+        x = rearrange(x, 'n t (h w) c -> n t h w c', h=14) 
+        spatial_map = spatial_map.squeeze(3)
+        spatial_map = rearrange(spatial_map, 'n t (h w) -> n t h w', h=14)
+        indices = torch.nonzero(spatial_map)
+        feats = x[indices[:, 0], indices[:, 1], indices[:, 2], indices[:, 3]]
+        sparse_tensor = SparseTensor(coords=indices.to(torch.int32), feats=feats)
+        x = self.point_cloud_tokenize(sparse_tensor)
+        x = torch.sparse_coo_tensor(indices=x.coords.permute(1,0), values=x.feats)
+        x = x.to_dense()
+        x = rearrange(x, 'b t h w c -> b (t h w) c')
         for i, blk in enumerate(self.temporal_blocks):
             x = blk(x, register_hook=register_hook)
 
