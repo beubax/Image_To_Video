@@ -51,7 +51,7 @@ def main(
         ]
     )
 
-    val_metadata_file = "hmdb51-train-meta.pickle"
+    val_metadata_file = "hmdb51-val-meta.pickle"
     val_precomputed_metadata = None
     if os.path.exists(val_metadata_file):
         with open(val_metadata_file, "rb") as f:
@@ -64,7 +64,7 @@ def main(
         frames_per_clip=frames_per_clip,
         step_between_clips=8,
         frame_sample_rate=2,
-        train=True,
+        train=False,
         output_format="THWC",
         transform=test_transform,
     )
