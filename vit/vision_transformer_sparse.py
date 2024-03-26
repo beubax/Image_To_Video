@@ -281,7 +281,6 @@ class VisionTransformer(nn.Module):
 
     def prepare_tokens(self, x):
         B, C, T, H, W = x.shape
-        print(x.shape)
         x = rearrange(x, 'b c t h w -> (b t) c h w')
         x = self.patch_embed(x)  # patch linear embedding
 
@@ -301,6 +300,7 @@ class VisionTransformer(nn.Module):
 
     def forward(self, x, register_hook = False):
         B, C, T, H, W = x.shape
+        print(x.shape)
         x = self.prepare_tokens(x)
         for i, blk in enumerate(self.blocks):
             if i < len(self.blocks) - 1:
@@ -322,7 +322,6 @@ class VisionTransformer(nn.Module):
         x = self.point_cloud_tokenize(sparse_tensor)
         x = torch.sparse_coo_tensor(indices=x.coords.permute(1,0), values=x.feats)
         x = x.to_dense()
-        print(x.shape)
         x = rearrange(x, 'b t h w c -> b (t h w) c')
         for i, blk in enumerate(self.temporal_blocks):
             x = blk(x, register_hook=register_hook)
