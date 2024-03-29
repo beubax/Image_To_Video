@@ -96,7 +96,7 @@ class Attention(nn.Module):
             attn[self.temporal_attn_mask.expand_as(attn)] = float('-inf')
 
         if pad_mask is not None:
-            attn[pad_mask.expand_as(attn)] = float('-inf')
+            attn[pad_mask.unsqueeze(1).expand_as(attn)] = float('-inf')
 
         attn = attn.softmax(dim=-1)
         attn = self.attn_drop(attn)
