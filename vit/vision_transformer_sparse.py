@@ -15,6 +15,7 @@ import torchsparse
 from torchsparse import SparseTensor
 from torchsparse import nn as spnn
 from torchsparse.nn import functional as F
+from torch.masked import masked_tensor
 
 from vit.utils import create_mask, trunc_normal_
 
@@ -85,7 +86,7 @@ class Attention(nn.Module):
     def get_attention_map(self):
         return self.attention_map
 
-    def forward(self, x, register_hook=False):
+    def forward(self, x, pad_mask = None, register_hook=False):
         B, N, C = x.shape
         qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
         q, k, v = qkv[0], qkv[1], qkv[2]
@@ -93,6 +94,9 @@ class Attention(nn.Module):
         attn = (q @ k.transpose(-2, -1)) * self.scale
         if self.temporal_attn_mask is not None:
             attn[self.temporal_attn_mask.expand_as(attn)] = float('-inf')
+
+        if pad_mask is not None:
+            attn[pad_mask.expand_as(attn)] = float('-inf')
 
         attn = attn.softmax(dim=-1)
         attn = self.attn_drop(attn)
@@ -144,8 +148,8 @@ class Block(nn.Module):
         mlp_hidden_dim = int(dim * mlp_ratio)
         self.mlp = Mlp(in_features=dim, hidden_features=mlp_hidden_dim, act_layer=act_layer, drop=drop)
 
-    def forward(self, x, return_spatial_map=False, return_attention=False, register_hook=False):
-        y, attn, qkv = self.attn(self.norm1(x), register_hook=register_hook)
+    def forward(self, x, pad_mask = None, return_spatial_map=False, return_attention=False, register_hook=False):
+        y, attn, qkv = self.attn(self.norm1(x), pad_mask=pad_mask, register_hook=register_hook)
         if return_attention:
             return attn
         x = x + self.drop_path(y)
@@ -300,7 +304,6 @@ class VisionTransformer(nn.Module):
 
     def forward(self, x, register_hook = False):
         B, C, T, H, W = x.shape
-        print(x.shape)
         x = self.prepare_tokens(x)
         for i, blk in enumerate(self.blocks):
             if i < len(self.blocks) - 1:
@@ -320,12 +323,13 @@ class VisionTransformer(nn.Module):
         feats = x[indices[:, 0], indices[:, 1], indices[:, 2], indices[:, 3]]
         sparse_tensor = SparseTensor(coords=indices.to(torch.int32), feats=feats)
         x = self.point_cloud_tokenize(sparse_tensor)
-        x = torch.sparse_coo_tensor(indices=x.coords.permute(1,0), values=x.feats)
-        print(x)
-        x = x.to_dense()
-        x = rearrange(x, 'b t h w c -> b (t h w) c')
+        tensor = torch.zeros(size=(B, 8, 4, 4, 512)).cuda()
+        tensor[x.coords[:, 0], x.coords[:, 1], x.coords[:, 2], x.coords[:, 3]] = x.feats
+        x = rearrange(tensor, 'b t h w c -> b (t h w) c')
+        mask = x == 0
+        mask = torch.einsum('ijk,ilk->ijl', mask.float(), mask.float())
         for i, blk in enumerate(self.temporal_blocks):
-            x = blk(x, register_hook=register_hook)
+            x = blk(x, pad_mask = mask.bool(), register_hook=register_hook)
 
         x = self.temporal_norm(x)
         x = torch.mean(x, dim=1)
