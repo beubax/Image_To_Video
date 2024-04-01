@@ -95,8 +95,8 @@ class Attention(nn.Module):
         if self.temporal_attn_mask is not None:
             attn[self.temporal_attn_mask.expand_as(attn)] = float('-inf')
 
-        # if pad_mask is not None:
-        #     attn[pad_mask.unsqueeze(1).expand_as(attn)] = float('-inf')
+        if pad_mask is not None:
+            attn[pad_mask.unsqueeze(1).expand_as(attn)] = float('-inf')
 
         attn = attn.softmax(dim=-1)
         attn = self.attn_drop(attn)
@@ -326,10 +326,11 @@ class VisionTransformer(nn.Module):
         tensor = torch.zeros(size=(B, 8, 4, 4, 512)).cuda()
         tensor[x.coords[:, 0], x.coords[:, 1], x.coords[:, 2], x.coords[:, 3]] = x.feats
         x = rearrange(tensor, 'b t h w c -> b (t h w) c')
-        mask = x == 0
-        mask = torch.einsum('ijk,ilk->ijl', mask.float(), mask.float())
+        mask = x.mean(dim=-1) != 0
+        mask = mask.float().unsqueeze(1)
+        mask = mask.permute(0, 2, 1) @ mask
         for i, blk in enumerate(self.temporal_blocks):
-            x = blk(x, pad_mask = mask.bool(), register_hook=register_hook)
+            x = blk(x, pad_mask = ~mask.bool(), register_hook=register_hook)
 
         x = self.temporal_norm(x)
         x = torch.mean(x, dim=1)
