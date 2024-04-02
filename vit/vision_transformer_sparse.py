@@ -94,10 +94,10 @@ class Attention(nn.Module):
         attn = (q @ k.transpose(-2, -1)) * self.scale
 
         if self.temporal_attn_mask is not None:
-            attn[self.temporal_attn_mask.expand_as(attn)] = float('-inf')
+            attn[self.temporal_attn_mask.expand_as(attn)] = -1e9
 
         if pad_mask is not None:
-            attn[pad_mask.unsqueeze(1).expand_as(attn)] = float('-inf')
+            attn[pad_mask.unsqueeze(1).expand_as(attn)] = -1e9
 
         attn = attn.softmax(dim=-1)
         attn = self.attn_drop(attn)
