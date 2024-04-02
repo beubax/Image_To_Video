@@ -9,6 +9,7 @@ from torchvision.transforms import transforms as T
 from torchvision.transforms._transforms_video import ToTensorVideo
 from pytorchvideo.transforms import Normalize, Permute, RandAugment
 from dataset.hmdb51 import HMDB51
+import torch
 from lightning_module import VideoLightningModule
 
 
@@ -45,7 +46,7 @@ def main(
 ):
     
     pl.seed_everything(seed)
-
+    torch.autograd.set_detect_anomaly(True)
     imagenet_mean = [0.485, 0.456, 0.406]
     imagenet_std = [0.229, 0.224, 0.225]
 
