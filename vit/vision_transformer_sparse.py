@@ -328,7 +328,7 @@ class VisionTransformer(nn.Module):
         tensor[x.coords[:, 0], x.coords[:, 1], x.coords[:, 2], x.coords[:, 3]] = x.feats
         x = rearrange(tensor, 'b t h w c -> b (t h w) c')
         mask = x.mean(dim=-1) == 0
-        mask = mask.expand((x.shape[0], x.shape[1], x.shape[1]))
+        mask = mask.unsqueeze(1).expand((x.shape[0], x.shape[1], x.shape[1]))
         for i, blk in enumerate(self.temporal_blocks):
             x = blk(x, pad_mask = mask, register_hook=register_hook)
 
