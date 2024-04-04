@@ -17,6 +17,7 @@ from lightning_module import VideoLightningModule
 @click.option("-a", "--annotation-path", type=click.Path(exists=True), required=True, help="path to dataset.")
 @click.option("-t", "--resume-training", type=click.Path(exists=True), default=None, help="Checkpoint path to resume training from.")
 @click.option("-p", "--point-cloud", type=bool, default=False, help="Whether to perform point cloud classify or not.")
+@click.option("--trajectory", type=bool, default=False, help="Whether to trajectory temporal modelling.")
 @click.option("-nc", "--num-classes", type=int, default=51, help="num of classes of dataset.")
 @click.option("-b", "--batch-size", type=int, default=32, help="batch size.")
 @click.option("-f", "--frames-per-clip", type=int, default=16, help="frame per clip.")
@@ -32,6 +33,7 @@ def main(
     annotation_path,
     resume_training,
     point_cloud,
+    trajectory,
     num_classes,
     batch_size,
     frames_per_clip,
@@ -125,7 +127,7 @@ def main(
         val_set,
         batch_size=batch_size,
         num_workers=num_workers,
-        shuffle=True,
+        shuffle=False,
         drop_last=True,
         pin_memory=True,
     )
@@ -137,6 +139,7 @@ def main(
         max_epochs=max_epochs,
         point_cloud_classify=point_cloud,
         testing=testing,
+        trajectory=trajectory,
     )
     
     checkpointing = pl.callbacks.ModelCheckpoint(dirpath="checkpoints/", filename="{epoch}", monitor="train_loss", mode="min", every_n_train_steps = 50)

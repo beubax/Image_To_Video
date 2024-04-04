@@ -71,26 +71,52 @@ class Attention(nn.Module):
         self.attn_drop = nn.Dropout(attn_drop)
         self.proj = nn.Linear(dim, dim)
         self.proj_drop = nn.Dropout(proj_drop)
-        self.attn_gradients = None
-        self.attention_map = None
 
-    def save_attn_gradients(self, attn_gradients):
-        self.attn_gradients = attn_gradients
+        self.proj_q = nn.Linear(dim, dim, bias=qkv_bias)
+        self.proj_kv = nn.Linear(dim, dim * 2, bias=qkv_bias)
 
-    def get_attn_gradients(self):
-        return self.attn_gradients
+    def forward(self, x, seq_len=196, num_frames=16, pad_mask = None, register_hook=False):
+        b, n, c = x.shape
+        P = seq_len
+        F = num_frames
+        h = self.num_heads
+        B = x.shape[0] // num_frames
+        N = seq_len * num_frames
+        C = x.shape[-1]
 
-    def save_attention_map(self, attention_map):
-        self.attention_map = attention_map
-
-    def get_attention_map(self):
-        return self.attention_map
-
-    def forward(self, x, pad_mask = None, register_hook=False):
-        B, N, C = x.shape
-        qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
+        qkv = self.qkv(x).reshape(b, n, 3, self.num_heads, c // self.num_heads).permute(2, 0, 3, 1, 4)
         q, k, v = qkv[0], qkv[1], qkv[2]
+         # Reshape: 'b n (h d) -> (b h) n d'
+        q, k, v = map(
+            lambda t: rearrange(t, '(b t) h n d -> (b h) (t n) d', h=h, t=F), (q, k, v))
+        
+        # Using full attention
+        q_dot_k = q @ k.transpose(-2, -1)
+        q_dot_k = rearrange(q_dot_k, 'b q (f n) -> b q f n', f=F)
+        space_attn = (self.scale * q_dot_k).softmax(dim=-1) #For each token, compute contribution of all other tokens per frame
+        attn = self.attn_drop(space_attn)                   #We are applying softmax per frame for each token
+        v_ = rearrange(v, 'b (f n) d -> b f n d', f=F, n=P)
+        x = torch.einsum('b q f n, b f n d -> b q f d', attn, v_) #This calculates, for every token, what is my worth in each frame
 
+        # Temporal attention: query is the similarity-aggregated patch
+        x = rearrange(x, '(b h) s f d -> b s f (h d)', b=B)
+        x_diag = rearrange(x, 'b (g n) f d -> b g n f d', g=F)
+        x_diag = torch.diagonal(x_diag, dim1=-4, dim2=-2)
+        x_diag = rearrange(x_diag, f'b n d f -> b (f n) d', f=F)
+        q2 = self.proj_q(x_diag)
+        k2, v2 = self.proj_kv(x).chunk(2, dim=-1)
+        q2 = rearrange(q2, f'b s (h d) -> b h s d', h=h)
+        q2 *= self.scale
+        k2, v2 = map(
+            lambda t: rearrange(t, f'b s f (h d) -> b h s f d', f=F,  h=h), (k2, v2))
+        attn = torch.einsum('b h s d, b h s f d -> b h s f', q2, k2)
+        attn = attn.softmax(dim=-1)
+        x = torch.einsum('b h s f, b h s f d -> b h s d', attn, v2)
+        x = rearrange(x, f'b h (t s) d -> (b t) s (h d)', t=F)
+        x = self.proj(x)
+        x = self.proj_drop(x)
+        return x, attn, qkv
+        
         attn = (q @ k.transpose(-2, -1)) * self.scale
 
         if self.temporal_attn_mask is not None:
@@ -103,9 +129,6 @@ class Attention(nn.Module):
         attn = self.attn_drop(attn)
 
         x = (attn @ v).transpose(1, 2).reshape(B, N, C)
-        self.save_attention_map(attn)
-        if register_hook:
-            attn.register_hook(self.save_attn_gradients)
         x = self.proj(x)
         x = self.proj_drop(x)
         return x, attn, qkv
@@ -131,7 +154,7 @@ class Spatial_Weighting(nn.Module):
         bipartition = torch.where(avg > 0,bipartition, torch.logical_not(bipartition)) 
         bipartition = bipartition.to(torch.float)
         eigenvec = torch.abs(torch.mul(eigenvec, bipartition))
-        eigenvec[eigenvec == 0] = float("-inf")
+        eigenvec[eigenvec == 0] = -1e9
         eigenvec = self.softmax(eigenvec)
         return eigenvec
 
@@ -172,29 +195,6 @@ class LinearClassifier(nn.Module):
     def forward(self, x):
         # linear layer
         return self.linear(x)
-    
-class ExampleNet(nn.Module):
-    def __init__(self, temporal_embed_dim):
-        super().__init__()
-        self.temporal_embed_dim = temporal_embed_dim
-        self.model = nn.Sequential(
-        spnn.Conv3d(768, self.temporal_embed_dim, kernel_size=(2,3,3), padding=(0,0,0), stride=(2,3,3)),
-    )
-
-    def forward(self, x):
-        return self.model(x)# .dense()
-    
-# class ExampleNet(nn.Module):
-#     def __init__(self, temporal_embed_dim):
-#         super().__init__()
-#         self.temporal_embed_dim = temporal_embed_dim
-#         self.net = nn.Sequential(
-#             nn.Conv3d(768, self.temporal_embed_dim, kernel_size=(2,3,3), padding=(0,0,0), stride=(2,3,3)),
-#         )
-
-#     def forward(self, x):
-#         return self.net(x)# .dense()
-
 
 class PatchEmbed(nn.Module):
     """ Image to Patch Embedding
@@ -218,7 +218,7 @@ class VisionTransformer(nn.Module):
     """ Vision Transformer """
     def __init__(self, img_size=[224], patch_size=16, in_chans=3, num_classes=0, embed_dim=768, depth=12,
                  num_heads=12, mlp_ratio=4., temporal_depth=1, qkv_bias=False, qk_scale=None, drop_rate=0., attn_drop_rate=0.,
-                 drop_path_rate=0., num_frames = 16, norm_layer=nn.LayerNorm, temporal_embed_dim = 512, temporal_num_heads = 8, **kwargs):
+                 drop_path_rate=0., num_frames = 16, norm_layer=nn.LayerNorm, temporal_embed_dim = 768, temporal_num_heads = 8, **kwargs):
         super().__init__()
         self.num_features = self.embed_dim = embed_dim
         self.num_frames = num_frames
@@ -238,14 +238,8 @@ class VisionTransformer(nn.Module):
                 dim=embed_dim, num_heads=num_heads, mlp_ratio=mlp_ratio, qkv_bias=qkv_bias, qk_scale=qk_scale,
                 drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[i], norm_layer=norm_layer, temporal_attn_mask=None)
             for i in range(depth)])
-        self.temporal_blocks = nn.ModuleList([
-            Block(
-                dim=temporal_embed_dim, num_heads=temporal_num_heads, mlp_ratio=mlp_ratio, qkv_bias=qkv_bias, qk_scale=qk_scale,
-                drop=drop_rate, num_frames = self.num_frames, attn_drop=attn_drop_rate, drop_path=dpr[i], norm_layer=norm_layer, temporal_attn_mask=self.temporal_attn_mask)
-            for i in range(temporal_depth)])
         # self.norm = norm_layer(embed_dim)
         self.temporal_norm = norm_layer(temporal_embed_dim)
-        self.point_cloud_tokenize = ExampleNet(temporal_embed_dim)
         # Classifier head
         self.head = LinearClassifier(temporal_embed_dim, num_classes) if num_classes > 0 else nn.Identity()
 
@@ -311,27 +305,9 @@ class VisionTransformer(nn.Module):
                 x = blk(x, register_hook=register_hook)
             else:
                 # return spatial_map of the last block
-                x, spatial_map =  blk(x, return_spatial_map=True, register_hook=register_hook)
+                x =  blk(x, register_hook=register_hook)
 
-        spatial_map = spatial_map.unsqueeze(3)
         x = rearrange(x, '(b t) n d -> b t n d', t=self.num_frames)
-        x = torch.einsum('ijkl,ijkp->ijkp', spatial_map, x)
-        # x = rearrange(x, 'n t (h w) c -> n c t h w', h=14)
-        x = rearrange(x, 'n t (h w) c -> n t h w c', h=14) 
-        spatial_map = spatial_map.squeeze(3)
-        spatial_map = rearrange(spatial_map, 'n t (h w) -> n t h w', h=14)
-        indices = torch.nonzero(spatial_map)
-        feats = x[indices[:, 0], indices[:, 1], indices[:, 2], indices[:, 3]]
-        sparse_tensor = SparseTensor(coords=indices.to(torch.int32), feats=feats)
-        x = self.point_cloud_tokenize(sparse_tensor)
-        tensor = torch.zeros(size=(B, 8, 4, 4, 512)).cuda()
-        tensor[x.coords[:, 0], x.coords[:, 1], x.coords[:, 2], x.coords[:, 3]] = x.feats
-        x = rearrange(tensor, 'b t h w c -> b (t h w) c')
-        mask = x.mean(dim=-1) == 0
-        mask = mask.unsqueeze(1).expand((x.shape[0], x.shape[1], x.shape[1]))
-        for i, blk in enumerate(self.temporal_blocks):
-            x = blk(x, pad_mask = mask, register_hook=register_hook)
-        
         x = self.temporal_norm(x)
         x = torch.mean(x, dim=1)
         x = self.head(x)

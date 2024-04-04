@@ -2,6 +2,7 @@ from typing import Any, Callable, List, Union
 from vit.utils import load_pretrained_weights
 from vit.vision_transformer_sparse import vit_base
 from vit.vision_transformer_point import vit_base as vit_base_point
+from vit.vision_transformer_trajectory import vit_base as vit_base_trajectory
 import torch
 from torch import nn, optim
 from torchmetrics.functional import accuracy, f1_score
@@ -20,6 +21,7 @@ class VideoLightningModule(pl.LightningModule):
         attention_dropout: float = 0.0,
         point_cloud_classify: bool = False,
         testing: bool = False,
+        trajectory: bool = False,
         **kwargs,
     ):
         self.save_hyperparameters()
@@ -31,6 +33,10 @@ class VideoLightningModule(pl.LightningModule):
             )
         elif testing:
              self.model = vit_base_point(
+                num_classes=self.num_classes
+            )
+        elif trajectory:
+            self.model = vit_base_trajectory(
                 num_classes=self.num_classes
             )
         else:
@@ -55,6 +61,10 @@ class VideoLightningModule(pl.LightningModule):
         elif testing:
             for name, param in self.model.named_parameters():
                 if 'pretrained_video_classifier' not in name and 'head' not in name:
+                        param.requires_grad = False
+        elif trajectory:
+            for name, param in self.model.named_parameters():
+                if 'temporal' not in name and 'head' not in name and 'proj_q' not in name and 'proj_kv' not in name: 
                         param.requires_grad = False
         else:
             for name, param in self.model.named_parameters():
