@@ -308,6 +308,7 @@ class VisionTransformer(nn.Module):
                 x =  blk(x, register_hook=register_hook)
 
         x = rearrange(x, '(b t) n d -> b t n d', t=self.num_frames)
+        print(x.shape)
         x = self.temporal_norm(x)
         x = torch.mean(x, dim=1)
         x = self.head(x)
