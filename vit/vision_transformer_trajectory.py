@@ -16,6 +16,7 @@ from torchsparse import SparseTensor
 from torchsparse import nn as spnn
 from torchsparse.nn import functional as F
 from torch.masked import masked_tensor
+import orthoformer_helper
 
 from vit.utils import create_mask, trunc_normal_
 
@@ -75,7 +76,7 @@ class Attention(nn.Module):
         self.proj_q = nn.Linear(dim, dim, bias=qkv_bias)
         self.proj_kv = nn.Linear(dim, dim * 2, bias=qkv_bias)
 
-    def forward(self, x, seq_len=196, num_frames=16, pad_mask = None, register_hook=False):
+    def forward(self, x, seq_len=196, num_frames=16, approx="orthoformer", num_landmarks=128, pad_mask = None, register_hook=False):
         b, n, c = x.shape
         P = seq_len
         F = num_frames
@@ -90,13 +91,21 @@ class Attention(nn.Module):
         q, k, v = map(
             lambda t: rearrange(t, '(b t) h n d -> (b h) (t n) d', h=h, t=F), (q, k, v))
         
-        # Using full attention
-        q_dot_k = q @ k.transpose(-2, -1)
-        q_dot_k = rearrange(q_dot_k, 'b q (f n) -> b q f n', f=F)
-        space_attn = (self.scale * q_dot_k).softmax(dim=-1) #For each token, compute contribution of all other tokens per frame
-        attn = self.attn_drop(space_attn)                   #We are applying softmax per frame for each token
-        v_ = rearrange(v, 'b (f n) d -> b f n d', f=F, n=P)
-        x = torch.einsum('b q f n, b f n d -> b q f d', attn, v_) #This calculates, for every token, what is my worth in each frame
+        if approx == "orthoformer":
+            x = orthoformer_helper.orthoformer(
+                q, k, v,
+                num_landmarks=num_landmarks,
+                num_frames=F,
+            )
+        else:
+            # Using full attention
+            q_dot_k = q @ k.transpose(-2, -1)
+            q_dot_k = rearrange(q_dot_k, 'b q (f n) -> b q f n', f=F)
+            space_attn = (self.scale * q_dot_k).softmax(dim=-1) #For each token, compute contribution of all other tokens per frame
+            attn = self.attn_drop(space_attn)                   #We are applying softmax per frame for each token
+            v_ = rearrange(v, 'b (f n) d -> b f n d', f=F, n=P)
+            x = torch.einsum('b q f n, b f n d -> b q f d', attn, v_) #This calculates, for every token, what is my worth in each frame
+            
 
         # Temporal attention: query is the similarity-aggregated patch
         x = rearrange(x, '(b h) s f d -> b s f (h d)', b=B)
