@@ -16,7 +16,7 @@ from torchsparse import SparseTensor
 from torchsparse import nn as spnn
 from torchsparse.nn import functional as F
 from torch.masked import masked_tensor
-import orthoformer_helper
+from . import orthoformer_helper
 
 from vit.utils import create_mask, trunc_normal_
 
