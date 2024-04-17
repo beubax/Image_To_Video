@@ -156,7 +156,7 @@ def main(
         accelerator="auto",
         fast_dev_run=fast_dev_run,
         logger=logger,
-        strategy=DDPStrategy(find_unused_parameters=True),
+        strategy='auto',
         callbacks=callbacks,
     )
     trainer.fit(model, train_dataloaders=train_dataloader, val_dataloaders=val_dataloader, ckpt_path=resume_training)
