@@ -349,7 +349,7 @@ class VisionTransformer(nn.Module):
                 else:
                     # return spatial_map of the last block
                     x, spatial_map =  blk(x, return_spatial_map=True, register_hook=register_hook)
-        return x, spatial_map
+
         x = rearrange(x, '(b t) n d -> b (t n) d', t=self.num_frames)
         (x, _) = torch.split(x, B, dim=0)
         # nodes = torch.randn(2, 128, 256)
