@@ -70,9 +70,7 @@ class VideoLightningModule(pl.LightningModule):
             for name, param in self.model.named_parameters():
                 if 'temporal' not in name and 'head' not in name and 'point_cloud_tokenize' not in name or 'flow_model' in name: 
                         param.requires_grad = False
-
-        for name, param in self.model.named_parameters():
-            print('{}: {}'.format(name, param.requires_grad))   
+  
         self.max_epochs = max_epochs
         self.weight_decay = weight_decay
 
