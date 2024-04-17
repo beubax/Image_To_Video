@@ -10,7 +10,7 @@ from torchvision.transforms._transforms_video import ToTensorVideo
 from pytorchvideo.transforms import Normalize, Permute, RandAugment
 from dataset.hmdb51 import HMDB51
 from lightning_module import VideoLightningModule
-
+from pytorch_lightning.plugins import DDPPlugin
 
 @click.command()
 @click.option("-r", "--dataset-root", type=click.Path(exists=True), required=True, help="path to dataset.")
@@ -157,6 +157,7 @@ def main(
         fast_dev_run=fast_dev_run,
         logger=logger,
         callbacks=callbacks,
+        plugins=DDPPlugin(find_unused_parameters=True),
     )
     trainer.fit(model, train_dataloaders=train_dataloader, val_dataloaders=val_dataloader, ckpt_path=resume_training)
     trainer.save_checkpoint("./vvit_hmdb51.ckpt")
