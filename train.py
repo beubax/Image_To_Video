@@ -150,7 +150,7 @@ def main(
         detect_anomaly=True,
         benchmark=True,
         check_val_every_n_epoch=4,
-        accumulate_grad_batches=2,
+        accumulate_grad_batches=4,
         max_epochs=max_epochs,
         devices=-1,
         accelerator="auto",
