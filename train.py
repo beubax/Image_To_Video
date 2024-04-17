@@ -157,7 +157,7 @@ def main(
         fast_dev_run=fast_dev_run,
         logger=logger,
         callbacks=callbacks,
-        strategy = DDPStrategy(find_unused_parameters=True),
+        strategy = "ddp_find_unused_parameters_false",
     )
     trainer.fit(model, train_dataloaders=train_dataloader, val_dataloaders=val_dataloader, ckpt_path=resume_training)
     trainer.save_checkpoint("./vvit_hmdb51.ckpt")
