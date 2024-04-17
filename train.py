@@ -10,7 +10,6 @@ from torchvision.transforms._transforms_video import ToTensorVideo
 from pytorchvideo.transforms import Normalize, Permute, RandAugment
 from dataset.hmdb51 import HMDB51
 from lightning_module import VideoLightningModule
-from pytorch_lightning.strategies.ddp import DDPStrategy
 
 @click.command()
 @click.option("-r", "--dataset-root", type=click.Path(exists=True), required=True, help="path to dataset.")
@@ -150,13 +149,12 @@ def main(
         detect_anomaly=True,
         benchmark=True,
         check_val_every_n_epoch=4,
-        accumulate_grad_batches=4,
+        accumulate_grad_batches=2,
         max_epochs=max_epochs,
         devices=-1,
         accelerator="auto",
         fast_dev_run=fast_dev_run,
         logger=logger,
-        strategy='auto',
         callbacks=callbacks,
     )
     trainer.fit(model, train_dataloaders=train_dataloader, val_dataloaders=val_dataloader, ckpt_path=resume_training)
