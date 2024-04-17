@@ -1,6 +1,6 @@
 from typing import Any, Callable, List, Union
 from vit.utils import load_pretrained_weights
-from vit.vision_transformer_sparse import vit_base
+from vit.vision_transformer_graph import vit_base
 from vit.vision_transformer_point import vit_base as vit_base_point
 from vit.vision_transformer_trajectory import vit_base as vit_base_trajectory
 import torch
@@ -68,7 +68,7 @@ class VideoLightningModule(pl.LightningModule):
                         param.requires_grad = False
         else:
             for name, param in self.model.named_parameters():
-                if 'temporal' not in name and 'head' not in name and 'point_cloud_tokenize' not in name: 
+                if 'temporal' not in name and 'head' not in name and 'point_cloud_tokenize' not in name and 'flow_model' not in name: 
                         param.requires_grad = False
             
         self.max_epochs = max_epochs
