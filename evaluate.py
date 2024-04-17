@@ -21,7 +21,7 @@ from lightning_module import VideoLightningModule
 @click.option("-m", "--model-path", type=click.Path(exists=True), required=True, help="path to model weight.")
 @click.option("-a", "--annotation-path", type=click.Path(exists=True), required=True, help="path to dataset.")
 @click.option("-nc", "--num-classes", type=int, default=51, help="num of classes of dataset.")
-@click.option("-b", "--batch-size", type=int, default=12, help="batch size.")
+@click.option("-b", "--batch-size", type=int, default=8, help="batch size.")
 @click.option("-f", "--frames-per-clip", type=int, default=16, help="frame per clip.")
 @click.option("-v", "--video-size", type=click.Tuple([int, int]), default=(224, 224), help="frame per clip.")
 @click.option("--num-workers", type=int, default=4)

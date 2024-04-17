@@ -108,37 +108,24 @@ if not os.path.exists(train_metadata_file):
 model = vit_base(num_classes=51).to(torch.device('cuda:0'))
 load_pretrained_weights(model, model_name="vit_base", patch_size=16)
 model.train()
-# flow_model = raft_large(pretrained=True, progress=False).to(torch.device('cuda:0'))
-# flow_model = flow_model.eval()
+flow_model = raft_large(pretrained=True, progress=False).to(torch.device('cuda:0'))
+flow_model = flow_model.eval()
 
 for batch in train_dataloader:
     video, label = batch
-    output = model(video.to(torch.device('cuda:0')))
-    # visualize_heatmap(spatial_map, video)
-    # start = time.time()
-    # flow_video = video
-    # flow_video = flow_video.permute(0, 2, 1, 3, 4)
-    # flow_video2 = flow_video[:, 1:]
-    # flow_video2 = torch.cat((flow_video2, flow_video2[:, -1].unsqueeze(1)), dim=1)
-    # flow_video = rearrange(flow_video, 'b t c h w -> (b t) c h w')
-    # flow_video2 = rearrange(flow_video2, 'b t c h w -> (b t) c h w')
-    # with torch.no_grad():
-    #     list_of_flows = flow_model(flow_video.to(torch.device('cuda:0')), flow_video2.to(torch.device('cuda:0')))
-    # predicted_flow = list_of_flows[-1]
-    # flow_img = flow_to_image(predicted_flow)
-    # print(time.time() - start)
-    # for i, img in enumerate(flow_img):
-    #     output_folder = "output/"  # Update this to the folder of your choice
-    #     write_jpeg(img.to("cpu"), output_folder + f"predicted_flow_{i}.jpg")
+    output, spatial_map = model(video.to(torch.device('cuda:0')))
+    visualize_heatmap(spatial_map, video)
+    flow_video = []
+    print(video.shape)
+    video = video.permute(2, 0, 1, 3, 4)
 
-
-    # for i, (img1, img2) in enumerate(zip(video, video[1:])):
-    #     list_of_flows = flow_model(img1.to(torch.device('cuda:0')), img2.to(torch.device('cuda:0')))
-    #     predicted_flow = list_of_flows[-1][0]
-    #     flow_img = flow_to_image(predicted_flow)
-    #     flow_video.append(flow_img.permute(1, 2, 0))
-    #     # output_folder = "output/"  # Update this to the folder of your choice
-    #     # write_jpeg(flow_img.to("cpu"), output_folder + f"predicted_flow_{i}.jpg")
+    for i, (img1, img2) in enumerate(zip(video, video[1:])):
+        list_of_flows = flow_model(img1.to(torch.device('cuda:0')), img2.to(torch.device('cuda:0')))
+        predicted_flow = list_of_flows[-1][0]
+        flow_img = flow_to_image(predicted_flow)
+        flow_video.append(flow_img.permute(1, 2, 0))
+        output_folder = "output2/"  # Update this to the folder of your choice
+        write_jpeg(flow_img.to("cpu"), output_folder + f"predicted_flow_{i}.jpg")
 
     # video = video.permute(1, 2, 0, 3, 4)
     # flow_video.append(flow_video[-1])

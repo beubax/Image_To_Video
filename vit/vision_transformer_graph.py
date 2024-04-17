@@ -336,6 +336,9 @@ class VisionTransformer(nn.Module):
             list_of_flows = self.flow_model(flow_video, flow_video2)
             predicted_flow = list_of_flows[-1]
             flow_img = flow_to_image(predicted_flow)
+            for i, img in enumerate(flow_img):
+                output_folder = "output/"  # Update this to the folder of your choice
+                write_jpeg(img.to("cpu"), output_folder + f"predicted_flow_{i}.jpg")
             flow_video = self.transforms(flow_img.permute(0, 2, 3, 1))
             flow_video = rearrange(flow_video, 'c (b t) h w -> b c t h w', t=self.num_frames)
             x = torch.cat((x, flow_video), dim=0)
@@ -346,7 +349,7 @@ class VisionTransformer(nn.Module):
                 else:
                     # return spatial_map of the last block
                     x, spatial_map =  blk(x, return_spatial_map=True, register_hook=register_hook)
-
+        return x, spatial_map
         x = rearrange(x, '(b t) n d -> b (t n) d', t=self.num_frames)
         (x, _) = torch.split(x, B, dim=0)
         # nodes = torch.randn(2, 128, 256)
