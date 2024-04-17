@@ -270,7 +270,7 @@ class VisionTransformer(nn.Module):
         # )
         self.transforms = train_transform = T.Compose([ToTensorVideo(),  # C, T, H, W
         Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),])
-        self.flow_model = raft_large(pretrained=True, progress=False).eval()
+        self.flow_model = raft_large(pretrained=True, progress=False)
         trunc_normal_(self.pos_embed, std=.02)
         trunc_normal_(self.cls_token, std=.02)
         self.apply(self._init_weights)
