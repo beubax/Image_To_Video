@@ -270,7 +270,7 @@ class VisionTransformer(nn.Module):
         # )
         self.transforms = train_transform = T.Compose([ToTensorVideo(),  # C, T, H, W
         Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),])
-        self.flow_model = raft_large(pretrained=True, progress=False)
+        self.flow_model = raft_large(pretrained=True, progress=False).eval()
         trunc_normal_(self.pos_embed, std=.02)
         trunc_normal_(self.cls_token, std=.02)
         self.apply(self._init_weights)
@@ -327,24 +327,25 @@ class VisionTransformer(nn.Module):
 
     def forward(self, x, register_hook = False):
         B, C, T, H, W = x.shape
-        flow_video = x.permute(0, 2, 1, 3, 4)
-        flow_video2 = flow_video[:, 1:]
-        flow_video2 = torch.cat((flow_video2, flow_video2[:, -2].unsqueeze(1)), dim=1)
-        flow_video = rearrange(flow_video, 'b t c h w -> (b t) c h w')
-        flow_video2 = rearrange(flow_video2, 'b t c h w -> (b t) c h w')
-        list_of_flows = self.flow_model(flow_video, flow_video2)
-        predicted_flow = list_of_flows[-1]
-        flow_img = flow_to_image(predicted_flow)
-        flow_video = self.transforms(flow_img.permute(0, 2, 3, 1))
-        flow_video = rearrange(flow_video, 'c (b t) h w -> b c t h w', t=self.num_frames)
-        x = torch.cat((x, flow_video), dim=0)
-        x = self.prepare_tokens(x)
-        for i, blk in enumerate(self.blocks):
-            if i < len(self.blocks) - 1:
-                x = blk(x, register_hook=register_hook)
-            else:
-                # return spatial_map of the last block
-                x, spatial_map =  blk(x, return_spatial_map=True, register_hook=register_hook)
+        with torch.no_grad():
+            flow_video = x.permute(0, 2, 1, 3, 4)
+            flow_video2 = flow_video[:, 1:]
+            flow_video2 = torch.cat((flow_video2, flow_video2[:, -2].unsqueeze(1)), dim=1)
+            flow_video = rearrange(flow_video, 'b t c h w -> (b t) c h w')
+            flow_video2 = rearrange(flow_video2, 'b t c h w -> (b t) c h w')
+            list_of_flows = self.flow_model(flow_video, flow_video2)
+            predicted_flow = list_of_flows[-1]
+            flow_img = flow_to_image(predicted_flow)
+            flow_video = self.transforms(flow_img.permute(0, 2, 3, 1))
+            flow_video = rearrange(flow_video, 'c (b t) h w -> b c t h w', t=self.num_frames)
+            x = torch.cat((x, flow_video), dim=0)
+            x = self.prepare_tokens(x)
+            for i, blk in enumerate(self.blocks):
+                if i < len(self.blocks) - 1:
+                    x = blk(x, register_hook=register_hook)
+                else:
+                    # return spatial_map of the last block
+                    x, spatial_map =  blk(x, return_spatial_map=True, register_hook=register_hook)
 
         x = rearrange(x, '(b t) n d -> b (t n) d', t=self.num_frames)
         (x, _) = torch.split(x, B, dim=0)
