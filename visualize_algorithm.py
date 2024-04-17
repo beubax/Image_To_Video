@@ -3,14 +3,16 @@ import pickle
 import torch
 from torchvision import transforms as t
 import torch.nn as nn
+import time
 # import torchshow as ts
 from torch.utils.data import DataLoader
 from dataset.hmdb51 import HMDB51
+from dataset.utils import find_classes
 from visualizations import visualize_eigvec, visualize_heatmap, visualize_heatmap2
 # from visualizations import visualize_heatmap, visualize_point_cloud
 from vit.utils import load_pretrained_weights
 # from vit.vision_transformer_sparse import vit_base
-from vit.vision_transformer_trajectory import vit_base, vit_small
+from vit.vision_transformer_graph import vit_base, vit_small
 from torchvision.transforms._transforms_video import ToTensorVideo
 from pytorchvideo.transforms import Normalize, Permute, RandAugment, AugMix
 from torchvision.transforms import transforms as T
@@ -18,7 +20,7 @@ from torchvision.transforms import transforms as T
 from torchvision.io import write_jpeg
 from torchvision.utils import flow_to_image
 from einops import rearrange
-from torchvision.models.optical_flow import raft_large
+from torchvision.models.optical_flow import raft_large, raft_small
 
 
 imagenet_mean = [0.485, 0.456, 0.406]
@@ -68,12 +70,22 @@ class Spatial_Weighting(nn.Module):
         self.num_frames = num_frames
         self.softmax = nn.Softmax(dim=-1)
 
-    def forward(self, key1, key2):
+    def forward(self, qkv1, qkv2):
+        query1 = qkv1[0]
+        query2 = qkv2[0]
+        key1 = qkv1[1]
+        key2 = qkv2[1]
         key1 = rearrange(key1, '(b t) h n d -> b t n (h d)', t=self.num_frames)
         key2 = rearrange(key2, '(b t) h n d -> b t n (h d)', t=self.num_frames)
-        feats1 = key1 @ key1.transpose(-1, -2)
-        feats2 = key2 @ key2.transpose(-1, -2)
-        feats = feats1 + feats2
+        query1 = rearrange(query1, '(b t) h n d -> b t n (h d)', t=self.num_frames)
+        query2 = rearrange(query2, '(b t) h n d -> b t n (h d)', t=self.num_frames)
+        feats1 = key1 @ query1.transpose(-1, -2)
+        feats2 = key2 @ query2.transpose(-1, -2)
+        # feats1 = nn.functional.normalize(feats1, p=2, dim=(-1,-2))
+        # feats2 = nn.functional.normalize(feats2, p=2, dim=(-1,-2))
+        print(feats1.mean(dim=-1).mean(dim=-1))
+        print(feats2.mean(dim=-1).mean(dim=-1))
+        feats = feats1
         feats = feats > 0.2
         feats = torch.where(feats.type(torch.cuda.FloatTensor) == 0, 1e-5, feats)
         d_i = torch.sum(feats, dim=-1)
@@ -95,38 +107,53 @@ if not os.path.exists(train_metadata_file):
 
 model = vit_base(num_classes=51).to(torch.device('cuda:0'))
 load_pretrained_weights(model, model_name="vit_base", patch_size=16)
-model.eval()
+model.train()
 # flow_model = raft_large(pretrained=True, progress=False).to(torch.device('cuda:0'))
 # flow_model = flow_model.eval()
 
-# for batch in train_dataloader:
-#     video, label = batch
-    # flow_video = []
-    # video = video.permute(2, 0, 1, 3, 4)
+for batch in train_dataloader:
+    video, label = batch
+    output = model(video.to(torch.device('cuda:0')))
+    # visualize_heatmap(spatial_map, video)
+    # start = time.time()
+    # flow_video = video
+    # flow_video = flow_video.permute(0, 2, 1, 3, 4)
+    # flow_video2 = flow_video[:, 1:]
+    # flow_video2 = torch.cat((flow_video2, flow_video2[:, -1].unsqueeze(1)), dim=1)
+    # flow_video = rearrange(flow_video, 'b t c h w -> (b t) c h w')
+    # flow_video2 = rearrange(flow_video2, 'b t c h w -> (b t) c h w')
+    # with torch.no_grad():
+    #     list_of_flows = flow_model(flow_video.to(torch.device('cuda:0')), flow_video2.to(torch.device('cuda:0')))
+    # predicted_flow = list_of_flows[-1]
+    # flow_img = flow_to_image(predicted_flow)
+    # print(time.time() - start)
+    # for i, img in enumerate(flow_img):
+    #     output_folder = "output/"  # Update this to the folder of your choice
+    #     write_jpeg(img.to("cpu"), output_folder + f"predicted_flow_{i}.jpg")
+
+
     # for i, (img1, img2) in enumerate(zip(video, video[1:])):
     #     list_of_flows = flow_model(img1.to(torch.device('cuda:0')), img2.to(torch.device('cuda:0')))
     #     predicted_flow = list_of_flows[-1][0]
     #     flow_img = flow_to_image(predicted_flow)
     #     flow_video.append(flow_img.permute(1, 2, 0))
-    #     output_folder = "output/"  # Update this to the folder of your choice
-    #     write_jpeg(flow_img.to("cpu"), output_folder + f"predicted_flow_{i}.jpg")
+    #     # output_folder = "output/"  # Update this to the folder of your choice
+    #     # write_jpeg(flow_img.to("cpu"), output_folder + f"predicted_flow_{i}.jpg")
 
     # video = video.permute(1, 2, 0, 3, 4)
     # flow_video.append(flow_video[-1])
     # flow_video = torch.stack(flow_video)
     # flow_video = train_transform(flow_video)
+    # print(time.time() - start)
 
-
-    # output, key1 = model(video.to(torch.device('cuda:0')))
-    # output, key2 = model(flow_video.unsqueeze(0))
+    # output, qkv1 = model(video.to(torch.device('cuda:0')))
+    # output, qkv2 = model(flow_video.unsqueeze(0))
     # spatial_weighting = Spatial_Weighting(num_frames=16)
-    # spatial_map = spatial_weighting(key1, key2)
+    # spatial_map = spatial_weighting(qkv1, qkv2)
     # visualize_heatmap(spatial_map, video)
-    # break
-#     ts.show_video(video[0].permute(1, 0, 2, 3))
-#     visualize_point_cloud(video, indices)
-#     # print(output.shape)
-#     break
+    # labels, class_to_idx = find_classes("hmdb51")
+    # print(labels[label.item()])
+    break
 
 for name, param in model.named_parameters():
    print('{}: {}'.format(name, param.requires_grad))

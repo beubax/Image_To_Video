@@ -146,7 +146,7 @@ class HMDB51(VisionDataset):
         video, audio, _, video_idx = self.video_clips.get_clip(idx)
         sample_index = self.indices[video_idx]
         _, class_index = self.samples[sample_index]
-
+        
         if self.transform is not None:
             video = self.transform(video)
 

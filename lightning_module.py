@@ -1,6 +1,6 @@
 from typing import Any, Callable, List, Union
 from vit.utils import load_pretrained_weights
-from vit.vision_transformer_sparse import vit_base
+from vit.vision_transformer_graph import vit_base
 from vit.vision_transformer_point import vit_base as vit_base_point
 from vit.vision_transformer_trajectory import vit_base as vit_base_trajectory
 import torch

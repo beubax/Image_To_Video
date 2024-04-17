@@ -8,15 +8,21 @@ from functools import partial
 import torch.nn.functional as F
 import torch
 import torch.nn as nn
+from torchvision.io import write_jpeg
+from torchvision.transforms import transforms as T
 from einops import rearrange
+from torchvision.utils import flow_to_image
+from torchvision.transforms._transforms_video import ToTensorVideo
 import numpy as np
 import spconv.pytorch as spconv
+from torchvision.models.optical_flow import raft_large
 import torchsparse
 from torchsparse import SparseTensor
 from torchsparse import nn as spnn
 from torchsparse.nn import functional as F
 from torch.masked import masked_tensor
-
+from vit.graph_transformer_pytorch import GraphTransformer
+from pytorchvideo.transforms import Normalize
 from vit.utils import create_mask, trunc_normal_
 
 def drop_path(x, drop_prob: float = 0., training: bool = False):
@@ -118,19 +124,27 @@ class Spatial_Weighting(nn.Module):
 
     def forward(self, qkv):
         key = qkv[1].clone().detach()
-        key = rearrange(key, '(b t) h n d -> b t n (h d)', t=self.num_frames)
-        feats = key @ key.transpose(-1, -2)
+        key = rearrange(key, '(b t) h n d -> b (t n) (h d)', t=self.num_frames)
+        B, _, _ = key.shape
+        (keys1, keys2) = torch.split(key, B//2, dim=0)
+        feats1 = keys1 @ keys1.transpose(-1, -2)
+        feats2 = keys2 @ keys2.transpose(-1, -2)
+        feats = feats1 * 0.5 + feats2 * 0.5
         feats = feats > 0.2
         feats = torch.where(feats.type(torch.cuda.FloatTensor) == 0, 1e-5, feats)
         d_i = torch.sum(feats, dim=-1)
         D = torch.diag_embed(d_i)
         _, eigenvectors = torch.lobpcg(A=D-feats, B=D, k=2, largest=False)
-        eigenvec = eigenvectors[:, :, :, 1]
+        eigenvec = eigenvectors[:, :, 1]
         avg = torch.mean(eigenvec, dim=-1).unsqueeze(-1)
         bipartition = torch.gt(eigenvec , 0)
         bipartition = torch.where(avg > 0,bipartition, torch.logical_not(bipartition)) 
         bipartition = bipartition.to(torch.float)
-        eigenvec = torch.abs(torch.mul(eigenvec, bipartition))
+        eigenvec = torch.abs(torch.mul(eigenvec, bipartition))        
+        # _, indices = torch.topk(eigenvec, 1000, dim=1)
+        # mask = torch.zeros_like(eigenvec)
+        # mask.scatter_(1, indices, 1)
+        # eigenvec = eigenvec * mask
         eigenvec[eigenvec == 0] = float("-inf")
         eigenvec = self.softmax(eigenvec)
         return eigenvec
@@ -217,7 +231,7 @@ class PatchEmbed(nn.Module):
 class VisionTransformer(nn.Module):
     """ Vision Transformer """
     def __init__(self, img_size=[224], patch_size=16, in_chans=3, num_classes=0, embed_dim=768, depth=12,
-                 num_heads=12, mlp_ratio=4., temporal_depth=1, qkv_bias=False, qk_scale=None, drop_rate=0., attn_drop_rate=0.,
+                 num_heads=12, mlp_ratio=4., temporal_depth=2, qkv_bias=False, qk_scale=None, drop_rate=0., attn_drop_rate=0.,
                  drop_path_rate=0., num_frames = 16, norm_layer=nn.LayerNorm, temporal_embed_dim = 512, temporal_num_heads = 8, **kwargs):
         super().__init__()
         self.num_features = self.embed_dim = embed_dim
@@ -228,7 +242,7 @@ class VisionTransformer(nn.Module):
 
         self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
         self.pos_embed = nn.Parameter(torch.zeros(1, num_patches + 1, embed_dim))
-        self.temporal_embedding = nn.Parameter(torch.zeros(1, self.num_frames, embed_dim))
+        self.temporal_embedding = nn.Parameter(torch.zeros(1, 8, temporal_embed_dim))
         self.pos_drop = nn.Dropout(p=drop_rate)
         self.temporal_attn_mask = create_mask(size=128, block_size=16)
         # self.temporal_norm = nn.LayerNorm()
@@ -248,7 +262,15 @@ class VisionTransformer(nn.Module):
         self.point_cloud_tokenize = ExampleNet(temporal_embed_dim)
         # Classifier head
         self.head = LinearClassifier(temporal_embed_dim, num_classes) if num_classes > 0 else nn.Identity()
-
+        # self.graph_transformer = GraphTransformer(dim = temporal_embed_dim,
+        # depth = 6,
+        # with_feedforwards = True,
+        # gated_residual = True,
+        # accept_adjacency_matrix = True 
+        # )
+        self.transforms = train_transform = T.Compose([ToTensorVideo(),  # C, T, H, W
+        Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),])
+        self.flow_model = raft_large(pretrained=True, progress=False).eval()
         trunc_normal_(self.pos_embed, std=.02)
         trunc_normal_(self.cls_token, std=.02)
         self.apply(self._init_weights)
@@ -297,38 +319,57 @@ class VisionTransformer(nn.Module):
         x = x + self.interpolate_pos_encoding(x, W, H)
 
         n = x.shape[1]
-        x = rearrange(x, '(b t) n d -> (b n) t d', t=self.num_frames)
-        x = x + self.temporal_embedding
-        x = rearrange(x, '(b n) t d -> (b t) n d', n=n)
+        # x = rearrange(x, '(b t) n d -> (b n) t d', t=self.num_frames)
+        # x = x + self.temporal_embedding
+        # x = rearrange(x, '(b n) t d -> (b t) n d', n=n)
 
         return self.pos_drop(x)
 
     def forward(self, x, register_hook = False):
         B, C, T, H, W = x.shape
-        x = self.prepare_tokens(x)
-        for i, blk in enumerate(self.blocks):
-            if i < len(self.blocks) - 1:
-                x = blk(x, register_hook=register_hook)
-            else:
-                # return spatial_map of the last block
-                x, spatial_map =  blk(x, return_spatial_map=True, register_hook=register_hook)
+        with torch.no_grad():
+            flow_video = x.permute(0, 2, 1, 3, 4)
+            flow_video2 = flow_video[:, 1:]
+            flow_video2 = torch.cat((flow_video2, flow_video2[:, -2].unsqueeze(1)), dim=1)
+            flow_video = rearrange(flow_video, 'b t c h w -> (b t) c h w')
+            flow_video2 = rearrange(flow_video2, 'b t c h w -> (b t) c h w')
+            list_of_flows = self.flow_model(flow_video, flow_video2)
+            predicted_flow = list_of_flows[-1]
+            flow_img = flow_to_image(predicted_flow)
+            flow_video = self.transforms(flow_img.permute(0, 2, 3, 1))
+            flow_video = rearrange(flow_video, 'c (b t) h w -> b c t h w', t=self.num_frames)
+            x = torch.cat((x, flow_video), dim=0)
+            x = self.prepare_tokens(x)
+            for i, blk in enumerate(self.blocks):
+                if i < len(self.blocks) - 1:
+                    x = blk(x, register_hook=register_hook)
+                else:
+                    # return spatial_map of the last block
+                    x, spatial_map =  blk(x, return_spatial_map=True, register_hook=register_hook)
 
-        spatial_map = spatial_map.unsqueeze(3)
-        x = rearrange(x, '(b t) n d -> b t n d', t=self.num_frames)
-        x = torch.einsum('ijkl,ijkp->ijkp', spatial_map, x)
-        # x = rearrange(x, 'n t (h w) c -> n c t h w', h=14)
-        x = rearrange(x, 'n t (h w) c -> n t h w c', h=14) 
-        spatial_map = spatial_map.squeeze(3)
-        spatial_map = rearrange(spatial_map, 'n t (h w) -> n t h w', h=14)
+        x = rearrange(x, '(b t) n d -> b (t n) d', t=self.num_frames)
+        (x, _) = torch.split(x, B, dim=0)
+        # nodes = torch.randn(2, 128, 256)
+        # adj_mat = torch.randint(0, 2, (2, 128, 128))
+        # mask = torch.ones(2, 128).bool()
+
+        # nodes, edges = self.graph_transformer(nodes=x, adj_mat = feats)
+        # print(nodes.shape)
+        spatial_map = spatial_map.unsqueeze(2)
+        x = torch.einsum('ijl,ijp->ijp', spatial_map, x)
+        # # x = rearrange(x, 'n t (h w) c -> n c t h w', h=14)
+        x = rearrange(x, 'n (t h w) c -> n t h w c', t = self.num_frames ,h=14) 
+        spatial_map = spatial_map.squeeze(2)
+        spatial_map = rearrange(spatial_map, 'n (t h w) -> n t h w', t=self.num_frames, h=14)
         indices = torch.nonzero(spatial_map)
-        print(indices.shape)
-        print(x.shape)
         feats = x[indices[:, 0], indices[:, 1], indices[:, 2], indices[:, 3]]
         sparse_tensor = SparseTensor(coords=indices.to(torch.int32), feats=feats)
         x = self.point_cloud_tokenize(sparse_tensor)
         tensor = torch.zeros(size=(B, 8, 4, 4, 512)).cuda()
         tensor[x.coords[:, 0], x.coords[:, 1], x.coords[:, 2], x.coords[:, 3]] = x.feats
-        x = rearrange(tensor, 'b t h w c -> b (t h w) c')
+        x = rearrange(tensor, 'b t h w c -> (b h w) t c')
+        x = x + self.temporal_embedding
+        x = rearrange(x, '(b h w) t c -> b (t h w) c', b = B, h = 4, w = 4)
         mask = x.mean(dim=-1) == 0
         mask = mask.unsqueeze(1).expand((x.shape[0], x.shape[1], x.shape[1]))
         for i, blk in enumerate(self.temporal_blocks):

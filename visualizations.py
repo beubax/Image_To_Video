@@ -69,20 +69,20 @@ def visualize_eigvec(eigvec, scales=[16,16], dims=(14, 14), save=True):
     """
     eigvec = eigvec[0, :, :].detach().cpu()
     for t, eigvec_t in enumerate(eigvec):   
-            num_bins = 20
+            # num_bins = 20
 
             # Compute histogram bins using torch.histc
-            hist = torch.histc(eigvec_t, bins=num_bins)
+            # hist = torch.histc(eigvec_t, bins=num_bins)
 
-            # Plot the histogram
-            plt.bar(range(num_bins), hist)
-            plt.xlabel('Bins')
-            plt.ylabel('Frequency')
-            plt.title('Histogram of Tensor Values')
+            # # Plot the histogram
+            # plt.bar(range(num_bins), hist)
+            # plt.xlabel('Bins')
+            # plt.ylabel('Frequency')
+            # plt.title('Histogram of Tensor Values')
 
-            # Save the histogram plot to disk
-            plt.savefig(f"Frame{t+1}_spatial_attn_hist.jpg")
-            plt.close()
+            # # Save the histogram plot to disk
+            # plt.savefig(f"Frame{t+1}_spatial_attn_hist.jpg")
+            # plt.close()
             # ts.save(eigvect_h.reshape(dims), f"Frame{t+1}-Head{h+1}_spatial_attn.jpg") 
             # print(f"Eigen attention saved at Frame{t+1}-Head{h+1}_spatial_attn.jpg.")
             eigvec_save = scipy.ndimage.zoom(eigvec_t.reshape(dims), scales, order=0, mode='nearest')
@@ -111,7 +111,8 @@ def inverse_normalize(tensors, mean, std):
 
 def visualize_heatmap(eigvec, frames, scales=[16,16], dims=(14, 14)):
     frames = inverse_normalize(frames, mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225))
-    eigvec = eigvec[0, :, :].detach().cpu()
+    eigvec = eigvec[0, :].detach().cpu()
+    eigvec = rearrange(eigvec, '(t n) -> t n', t=16)
     for t, eigvec_t in enumerate(eigvec):
         frame = cv2.cvtColor(frames[t].permute(1, 2, 0).cpu().numpy().astype(np.uint8), cv2.COLOR_RGB2BGR)
         cam = scipy.ndimage.zoom(eigvec_t.reshape(dims), scales, order=0, mode='nearest')
