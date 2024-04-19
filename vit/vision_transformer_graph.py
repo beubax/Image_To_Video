@@ -116,6 +116,39 @@ class Attention(nn.Module):
         x = self.proj_drop(x)
         return x, attn, qkv
 
+# class Spatial_Weighting(nn.Module):
+#     def __init__(self, num_frames):
+#         super().__init__()
+#         self.num_frames = num_frames
+#         self.softmax = nn.Softmax(dim=-1)
+
+#     def forward(self, qkv):
+#         key = qkv[1].clone().detach()
+#         key = rearrange(key, '(b t) h n d -> b (t n) (h d)', t=self.num_frames)
+#         B, _, _ = key.shape
+#         (keys1, keys2) = torch.split(key, B//2, dim=0)
+#         feats1 = keys1 @ keys1.transpose(-1, -2)
+#         feats2 = keys2 @ keys2.transpose(-1, -2)
+#         feats = feats1 * 0.5 + feats2 * 0.5
+#         feats = feats > 0.2
+#         feats = torch.where(feats.type(torch.cuda.FloatTensor) == 0, 1e-5, feats)
+#         d_i = torch.sum(feats, dim=-1)
+#         D = torch.diag_embed(d_i)
+#         _, eigenvectors = torch.lobpcg(A=D-feats, B=D, k=2, largest=False)
+#         eigenvec = eigenvectors[:, :, 1]
+#         avg = torch.mean(eigenvec, dim=-1).unsqueeze(-1)
+#         bipartition = torch.gt(eigenvec , 0)
+#         bipartition = torch.where(avg > 0,bipartition, torch.logical_not(bipartition)) 
+#         bipartition = bipartition.to(torch.float)
+#         eigenvec = torch.abs(torch.mul(eigenvec, bipartition))        
+#         # _, indices = torch.topk(eigenvec, 1000, dim=1)
+#         # mask = torch.zeros_like(eigenvec)
+#         # mask.scatter_(1, indices, 1)
+#         # eigenvec = eigenvec * mask
+#         eigenvec[eigenvec == 0] = float("-inf")
+#         eigenvec = self.softmax(eigenvec)
+#         return eigenvec
+    
 class Spatial_Weighting(nn.Module):
     def __init__(self, num_frames):
         super().__init__()
@@ -141,13 +174,19 @@ class Spatial_Weighting(nn.Module):
         bipartition = torch.where(avg > 0,bipartition, torch.logical_not(bipartition)) 
         bipartition = bipartition.to(torch.float)
         eigenvec = torch.abs(torch.mul(eigenvec, bipartition))        
-        # _, indices = torch.topk(eigenvec, 1000, dim=1)
+        _, indices = torch.topk(eigenvec, 500, dim=1)
+        indices = indices.unsqueeze(2).expand(indices.size(0), indices.size(1), keys1.size(2))
+        keys = torch.gather(keys1, 1, indices)
+        adj_mat = keys @ keys.transpose(-1, -2)
+        adj_mat = self.softmax(adj_mat)
+        return adj_mat, indices
+
         # mask = torch.zeros_like(eigenvec)
         # mask.scatter_(1, indices, 1)
         # eigenvec = eigenvec * mask
-        eigenvec[eigenvec == 0] = float("-inf")
-        eigenvec = self.softmax(eigenvec)
-        return eigenvec
+        # eigenvec[eigenvec == 0] = float("-inf")
+        # eigenvec = self.softmax(eigenvec)
+        # return eigenvec
 
 
 class Block(nn.Module):
@@ -170,8 +209,8 @@ class Block(nn.Module):
         x = x + self.drop_path(y)
         x = x + self.drop_path(self.mlp(self.norm2(x)))
         if return_spatial_map:
-            spatial_map = self.spatial_weighting(qkv)
-            return x, spatial_map
+            adj_mat, indices = self.spatial_weighting(qkv)
+            return x, adj_mat, indices
         return x
     
 class LinearClassifier(nn.Module):
@@ -179,13 +218,17 @@ class LinearClassifier(nn.Module):
     def __init__(self, dim, num_labels=1000):
         super().__init__()
         self.num_labels = num_labels
-        self.linear = nn.Linear(dim, num_labels)
-        self.linear.weight.data.normal_(mean=0.0, std=0.01)
-        self.linear.bias.data.zero_()
+        self.linear1 = nn.Linear(dim, 256)
+        self.linear2 = nn.Linear(256, num_labels)
+        self.linear1.weight.data.normal_(mean=0.0, std=0.01)
+        self.linear1.bias.data.zero_()
+        self.linear2.weight.data.normal_(mean=0.0, std=0.01)
+        self.linear2.bias.data.zero_()
+        self.relu = nn.ReLU()
 
     def forward(self, x):
-        # linear layer
-        return self.linear(x)
+        # linear layers
+        return self.linear2(self.relu(self.linear1(x)))
     
 class ExampleNet(nn.Module):
     def __init__(self, temporal_embed_dim):
@@ -242,7 +285,7 @@ class VisionTransformer(nn.Module):
 
         self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
         self.pos_embed = nn.Parameter(torch.zeros(1, num_patches + 1, embed_dim))
-        self.temporal_embedding = nn.Parameter(torch.zeros(1, 8, temporal_embed_dim))
+        self.temporal_embedding = nn.Parameter(torch.zeros(1, 16, embed_dim))
         self.pos_drop = nn.Dropout(p=drop_rate)
         self.temporal_attn_mask = create_mask(size=128, block_size=16)
         # self.temporal_norm = nn.LayerNorm()
@@ -252,23 +295,23 @@ class VisionTransformer(nn.Module):
                 dim=embed_dim, num_heads=num_heads, mlp_ratio=mlp_ratio, qkv_bias=qkv_bias, qk_scale=qk_scale,
                 drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[i], norm_layer=norm_layer, temporal_attn_mask=None)
             for i in range(depth)])
-        self.temporal_blocks = nn.ModuleList([
-            Block(
-                dim=temporal_embed_dim, num_heads=temporal_num_heads, mlp_ratio=mlp_ratio, qkv_bias=qkv_bias, qk_scale=qk_scale,
-                drop=drop_rate, num_frames = self.num_frames, attn_drop=attn_drop_rate, drop_path=dpr[i], norm_layer=norm_layer, temporal_attn_mask=self.temporal_attn_mask)
-            for i in range(temporal_depth)])
+        # self.temporal_blocks = nn.ModuleList([
+        #     Block(
+        #         dim=temporal_embed_dim, num_heads=temporal_num_heads, mlp_ratio=mlp_ratio, qkv_bias=qkv_bias, qk_scale=qk_scale,
+        #         drop=drop_rate, num_frames = self.num_frames, attn_drop=attn_drop_rate, drop_path=dpr[i], norm_layer=norm_layer, temporal_attn_mask=self.temporal_attn_mask)
+        #     for i in range(temporal_depth)])
         # self.norm = norm_layer(embed_dim)
-        self.temporal_norm = norm_layer(temporal_embed_dim)
-        self.point_cloud_tokenize = ExampleNet(temporal_embed_dim)
+        self.temporal_norm = norm_layer(embed_dim)
+        # self.point_cloud_tokenize = ExampleNet(temporal_embed_dim)
         # Classifier head
-        self.head = LinearClassifier(temporal_embed_dim, num_classes) if num_classes > 0 else nn.Identity()
-        # self.graph_transformer = GraphTransformer(dim = temporal_embed_dim,
-        # depth = 6,
-        # with_feedforwards = True,
-        # gated_residual = True,
-        # accept_adjacency_matrix = True 
-        # )
-        self.transforms = train_transform = T.Compose([ToTensorVideo(),  # C, T, H, W
+        self.head = LinearClassifier(embed_dim, num_classes) if num_classes > 0 else nn.Identity()
+        self.graph_transformer = GraphTransformer(dim = embed_dim,
+        depth = 6,
+        with_feedforwards = True,
+        gated_residual = True,
+        accept_adjacency_matrix = True 
+        )
+        self.transforms = T.Compose([ToTensorVideo(),  # C, T, H, W
         Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),])
         self.flow_model = raft_large(pretrained=True, progress=False)
         trunc_normal_(self.pos_embed, std=.02)
@@ -336,9 +379,6 @@ class VisionTransformer(nn.Module):
             list_of_flows = self.flow_model(flow_video, flow_video2)
             predicted_flow = list_of_flows[-1]
             flow_img = flow_to_image(predicted_flow)
-            # for i, img in enumerate(flow_img):
-            #     output_folder = "output/"  # Update this to the folder of your choice
-            #     write_jpeg(img.to("cpu"), output_folder + f"predicted_flow_{i}.jpg")
             flow_video = self.transforms(flow_img.permute(0, 2, 3, 1))
             flow_video = rearrange(flow_video, 'c (b t) h w -> b c t h w', t=self.num_frames)
             x = torch.cat((x, flow_video), dim=0)
@@ -348,35 +388,35 @@ class VisionTransformer(nn.Module):
                     x = blk(x, register_hook=register_hook)
                 else:
                     # return spatial_map of the last block
-                    x, spatial_map =  blk(x, return_spatial_map=True, register_hook=register_hook)
+                    x, adj_mat, indices =  blk(x, return_spatial_map=True, register_hook=register_hook)
 
-        x = rearrange(x, '(b t) n d -> b (t n) d', t=self.num_frames)
-        (x, _) = torch.split(x, B, dim=0)
-        # nodes = torch.randn(2, 128, 256)
-        # adj_mat = torch.randint(0, 2, (2, 128, 128))
-        # mask = torch.ones(2, 128).bool()
-
-        # nodes, edges = self.graph_transformer(nodes=x, adj_mat = feats)
-        # print(nodes.shape)
-        spatial_map = spatial_map.unsqueeze(2)
-        x = torch.einsum('ijl,ijp->ijp', spatial_map, x)
-        # # x = rearrange(x, 'n t (h w) c -> n c t h w', h=14)
-        x = rearrange(x, 'n (t h w) c -> n t h w c', t = self.num_frames ,h=14) 
-        spatial_map = spatial_map.squeeze(2)
-        spatial_map = rearrange(spatial_map, 'n (t h w) -> n t h w', t=self.num_frames, h=14)
-        indices = torch.nonzero(spatial_map)
-        feats = x[indices[:, 0], indices[:, 1], indices[:, 2], indices[:, 3]]
-        sparse_tensor = SparseTensor(coords=indices.to(torch.int32), feats=feats)
-        x = self.point_cloud_tokenize(sparse_tensor)
-        tensor = torch.zeros(size=(B, 8, 4, 4, 512)).cuda()
-        tensor[x.coords[:, 0], x.coords[:, 1], x.coords[:, 2], x.coords[:, 3]] = x.feats
-        x = rearrange(tensor, 'b t h w c -> (b h w) t c')
+        n = x.shape[1]
+        x = rearrange(x, '(b t) n d -> (b n) t d', t=self.num_frames)
         x = x + self.temporal_embedding
-        x = rearrange(x, '(b h w) t c -> b (t h w) c', b = B, h = 4, w = 4)
-        mask = x.mean(dim=-1) == 0
-        mask = mask.unsqueeze(1).expand((x.shape[0], x.shape[1], x.shape[1]))
-        for i, blk in enumerate(self.temporal_blocks):
-            x = blk(x, pad_mask = mask, register_hook=register_hook)
+        x = rearrange(x, '(b n) t d -> b (t n) d', n=n)
+        (x, _) = torch.split(x, B, dim=0)
+        feats = torch.gather(x, 1, indices)
+        x, _ = self.graph_transformer(nodes=feats, adj_mat = adj_mat)
+        # spatial_map = spatial_map.unsqueeze(2)
+        # x = torch.einsum('ijl,ijp->ijp', spatial_map, x)
+        # # # x = rearrange(x, 'n t (h w) c -> n c t h w', h=14)
+        # x = rearrange(x, 'n (t h w) c -> n t h w c', t = self.num_frames ,h=14) 
+        # spatial_map = spatial_map.squeeze(2)
+        # spatial_map = rearrange(spatial_map, 'n (t h w) -> n t h w', t=self.num_frames, h=14)
+        # indices = torch.nonzero(spatial_map)
+        # spatial_map = rearrange(spatial_map, 'n t h w -> n (t h w)', t=self.num_frames, h=14)
+        # feats = x[indices[:, 0], indices[:, 1], indices[:, 2], indices[:, 3]]
+        # sparse_tensor = SparseTensor(coords=indices.to(torch.int32), feats=feats)
+        # x = self.point_cloud_tokenize(sparse_tensor)
+        # tensor = torch.zeros(size=(B, 8, 4, 4, 512)).cuda()
+        # tensor[x.coords[:, 0], x.coords[:, 1], x.coords[:, 2], x.coords[:, 3]] = x.feats
+        # x = rearrange(tensor, 'b t h w c -> (b h w) t c')
+        # x = x + self.temporal_embedding
+        # x = rearrange(x, '(b h w) t c -> b (t h w) c', b = B, h = 4, w = 4)
+        # mask = x.mean(dim=-1) == 0
+        # mask = mask.unsqueeze(1).expand((x.shape[0], x.shape[1], x.shape[1]))
+        # for i, blk in enumerate(self.temporal_blocks):
+        #     x = blk(x, pad_mask = mask, register_hook=register_hook)
         
         x = self.temporal_norm(x)
         x = torch.mean(x, dim=1)

@@ -107,25 +107,25 @@ if not os.path.exists(train_metadata_file):
 
 model = vit_base(num_classes=51).to(torch.device('cuda:0'))
 load_pretrained_weights(model, model_name="vit_base", patch_size=16)
-model.train()
-flow_model = raft_large(pretrained=True, progress=False).to(torch.device('cuda:0'))
-flow_model = flow_model.eval()
+model.eval()
+# flow_model = raft_large(pretrained=True, progress=False).to(torch.device('cuda:0'))
+# flow_model = flow_model.eval()
 
-for batch in train_dataloader:
-    video, label = batch
-    output, spatial_map = model(video.to(torch.device('cuda:0')))
-    visualize_heatmap(spatial_map, video)
-    flow_video = []
-    print(video.shape)
-    video = video.permute(2, 0, 1, 3, 4)
+# for batch in train_dataloader:
+#     video, label = batch
+#     output = model(video.to(torch.device('cuda:0')))
+    # visualize_heatmap(spatial_map, video)
+    # flow_video = []
+    # print(video.shape)
+    # video = video.permute(2, 0, 1, 3, 4)
 
-    for i, (img1, img2) in enumerate(zip(video, video[1:])):
-        list_of_flows = flow_model(img1.to(torch.device('cuda:0')), img2.to(torch.device('cuda:0')))
-        predicted_flow = list_of_flows[-1][0]
-        flow_img = flow_to_image(predicted_flow)
-        flow_video.append(flow_img.permute(1, 2, 0))
-        output_folder = "output2/"  # Update this to the folder of your choice
-        write_jpeg(flow_img.to("cpu"), output_folder + f"predicted_flow_{i}.jpg")
+    # for i, (img1, img2) in enumerate(zip(video, video[1:])):
+    #     list_of_flows = flow_model(img1.to(torch.device('cuda:0')), img2.to(torch.device('cuda:0')))
+    #     predicted_flow = list_of_flows[-1][0]
+    #     flow_img = flow_to_image(predicted_flow)
+    #     flow_video.append(flow_img.permute(1, 2, 0))
+    #     output_folder = "output2/"  # Update this to the folder of your choice
+    #     write_jpeg(flow_img.to("cpu"), output_folder + f"predicted_flow_{i}.jpg")
 
     # video = video.permute(1, 2, 0, 3, 4)
     # flow_video.append(flow_video[-1])
@@ -140,7 +140,7 @@ for batch in train_dataloader:
     # visualize_heatmap(spatial_map, video)
     # labels, class_to_idx = find_classes("hmdb51")
     # print(labels[label.item()])
-    break
+    # break
 
 for name, param in model.named_parameters():
    print('{}: {}'.format(name, param.requires_grad))

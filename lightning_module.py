@@ -68,7 +68,7 @@ class VideoLightningModule(pl.LightningModule):
                         param.requires_grad = False
         else:
             for name, param in self.model.named_parameters():
-                if 'temporal' not in name and 'head' not in name and 'point_cloud_tokenize' not in name or 'flow_model' in name: 
+                if 'temporal' not in name and 'head' not in name and 'point_cloud_tokenize' not in name and 'graph_transformer' not in name or 'flow_model' in name: 
                         param.requires_grad = False
   
         self.max_epochs = max_epochs
