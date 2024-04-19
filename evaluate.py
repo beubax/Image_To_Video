@@ -21,7 +21,7 @@ from lightning_module import VideoLightningModule
 @click.option("-m", "--model-path", type=click.Path(exists=True), required=True, help="path to model weight.")
 @click.option("-a", "--annotation-path", type=click.Path(exists=True), required=True, help="path to dataset.")
 @click.option("-nc", "--num-classes", type=int, default=51, help="num of classes of dataset.")
-@click.option("-b", "--batch-size", type=int, default=8, help="batch size.")
+@click.option("-b", "--batch-size", type=int, default=4, help="batch size.")
 @click.option("-f", "--frames-per-clip", type=int, default=16, help="frame per clip.")
 @click.option("-v", "--video-size", type=click.Tuple([int, int]), default=(224, 224), help="frame per clip.")
 @click.option("--num-workers", type=int, default=4)
@@ -51,7 +51,7 @@ def main(
         ]
     )
 
-    val_metadata_file = "hmdb51-val-meta.pickle"
+    val_metadata_file = "hmdb51-train-meta.pickle"
     val_precomputed_metadata = None
     if os.path.exists(val_metadata_file):
         with open(val_metadata_file, "rb") as f:
@@ -64,7 +64,7 @@ def main(
         frames_per_clip=frames_per_clip,
         step_between_clips=8,
         frame_sample_rate=2,
-        train=False,
+        train=True,
         output_format="THWC",
         transform=test_transform,
     )
