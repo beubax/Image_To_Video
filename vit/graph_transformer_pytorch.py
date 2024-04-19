@@ -120,7 +120,7 @@ class GraphTransformer(nn.Module):
         depth,
         dim_head = 64,
         edge_dim = None,
-        heads = 8,
+        heads = 6,
         gated_residual = True,
         with_feedforwards = False,
         norm_edges = False,

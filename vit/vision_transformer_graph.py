@@ -306,7 +306,7 @@ class VisionTransformer(nn.Module):
         # Classifier head
         self.head = LinearClassifier(embed_dim, num_classes) if num_classes > 0 else nn.Identity()
         self.graph_transformer = GraphTransformer(dim = embed_dim,
-        depth = 6,
+        depth = 2,
         with_feedforwards = True,
         gated_residual = True,
         accept_adjacency_matrix = True 
