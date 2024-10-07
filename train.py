@@ -1,6 +1,7 @@
 import click
 import os
 import pickle
+from dataset.kinetics import Kinetics
 import lightning.pytorch as pl
 import matplotlib.pyplot as plt
 from lightning.pytorch.loggers import TensorBoardLogger
@@ -68,20 +69,20 @@ def main(
         ]
     )
     
-    train_metadata_file = "hmdb51-train-meta.pickle"
+    train_metadata_file = "kinetics-train-meta.pickle"
     train_precomputed_metadata = None
     if os.path.exists(train_metadata_file):
         with open(train_metadata_file, "rb") as f:
             train_precomputed_metadata = pickle.load(f)
 
-    train_set = HMDB51(
+    train_set = Kinetics(
     root=dataset_root,
-    annotation_path=annotation_path,
     _precomputed_metadata=train_precomputed_metadata,
     frames_per_clip=frames_per_clip,
     step_between_clips=8,
     frame_sample_rate=2,
-    train=True,
+    split="train",
+    download=True,
     output_format="THWC",
     transform=train_transform,
 )
@@ -90,20 +91,20 @@ def main(
         with open(train_metadata_file, "wb") as f:
             pickle.dump(train_set.metadata, f, protocol=pickle.HIGHEST_PROTOCOL)
 
-    val_metadata_file = "hmdb51-val-meta.pickle"
+    val_metadata_file = "kinetics-val-meta.pickle"
     val_precomputed_metadata = None
     if os.path.exists(val_metadata_file):
         with open(val_metadata_file, "rb") as f:
             val_precomputed_metadata = pickle.load(f)
 
-    val_set = HMDB51(
+    val_set = Kinetics(
         root=dataset_root,
-        annotation_path=annotation_path,
         _precomputed_metadata=val_precomputed_metadata,
         frames_per_clip=frames_per_clip,
         step_between_clips=8,
         frame_sample_rate=2,
-        train=False,
+        split="val",
+        download=True,
         output_format="THWC",
         transform=test_transform,
     )
@@ -158,7 +159,7 @@ def main(
         callbacks=callbacks,
     )
     trainer.fit(model, train_dataloaders=train_dataloader, val_dataloaders=val_dataloader, ckpt_path=resume_training)
-    trainer.save_checkpoint("./vvit_hmdb51.ckpt")
+    trainer.save_checkpoint("./kinetics.ckpt")
 
 
 if __name__ == "__main__":
