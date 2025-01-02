@@ -1,7 +1,6 @@
 import click
 import os
 import pickle
-from dataset.kinetics import Kinetics
 import lightning.pytorch as pl
 import matplotlib.pyplot as plt
 from lightning.pytorch.loggers import TensorBoardLogger
@@ -69,20 +68,20 @@ def main(
         ]
     )
     
-    train_metadata_file = "kinetics-train-meta.pickle"
+    train_metadata_file = "hmdb51-train-meta.pickle"
     train_precomputed_metadata = None
     if os.path.exists(train_metadata_file):
         with open(train_metadata_file, "rb") as f:
             train_precomputed_metadata = pickle.load(f)
 
-    train_set = Kinetics(
+    train_set = HMDB51(
     root=dataset_root,
+    annotation_path=annotation_path,
     _precomputed_metadata=train_precomputed_metadata,
     frames_per_clip=frames_per_clip,
     step_between_clips=8,
     frame_sample_rate=2,
-    split="train",
-    download=True,
+    train=True,
     output_format="THWC",
     transform=train_transform,
 )
@@ -91,20 +90,20 @@ def main(
         with open(train_metadata_file, "wb") as f:
             pickle.dump(train_set.metadata, f, protocol=pickle.HIGHEST_PROTOCOL)
 
-    val_metadata_file = "kinetics-val-meta.pickle"
+    val_metadata_file = "hmdb51-val-meta.pickle"
     val_precomputed_metadata = None
     if os.path.exists(val_metadata_file):
         with open(val_metadata_file, "rb") as f:
             val_precomputed_metadata = pickle.load(f)
 
-    val_set = Kinetics(
+    val_set = HMDB51(
         root=dataset_root,
+        annotation_path=annotation_path,
         _precomputed_metadata=val_precomputed_metadata,
         frames_per_clip=frames_per_clip,
         step_between_clips=8,
         frame_sample_rate=2,
-        split="val",
-        download=True,
+        train=False,
         output_format="THWC",
         transform=test_transform,
     )
