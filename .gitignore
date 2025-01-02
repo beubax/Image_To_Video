@@ -8,6 +8,7 @@ std_out_26
 err_26
 *.ckpt
 test.py
+*.pt
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
