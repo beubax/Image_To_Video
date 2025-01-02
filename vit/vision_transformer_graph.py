@@ -13,14 +13,7 @@ from torchvision.transforms import transforms as T
 from einops import rearrange
 from torchvision.utils import flow_to_image
 from torchvision.transforms._transforms_video import ToTensorVideo
-import numpy as np
-import spconv.pytorch as spconv
 from torchvision.models.optical_flow import raft_large
-import torchsparse
-from torchsparse import SparseTensor
-from torchsparse import nn as spnn
-from torchsparse.nn import functional as F
-from torch.masked import masked_tensor
 from vit.graph_transformer_pytorch import GraphTransformer
 from pytorchvideo.transforms import Normalize
 from vit.utils import create_mask, trunc_normal_
