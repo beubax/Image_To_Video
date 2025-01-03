@@ -22,7 +22,7 @@ from lightning_module import VideoLightningModule
 @click.option("-f", "--frames-per-clip", type=int, default=16, help="frame per clip.")
 @click.option("-v", "--video-size", type=click.Tuple([int, int]), default=(224, 224), help="frame per clip.")
 @click.option("--testing", type=bool, default=False, help="To test functionality.")
-@click.option("--max-epochs", type=int, default=None, help="max epochs.")
+@click.option("--max-epochs", type=int, default=50, help="max epochs.")
 @click.option("--num-workers", type=int, default=4)
 @click.option("--fast-dev-run", type=bool, is_flag=True, show_default=True, default=False)
 @click.option("--seed", type=int, default=42, help="random seed.")
@@ -82,7 +82,6 @@ def main(
     step_between_clips=8,
     frame_sample_rate=2,
     train=True,
-    fold=2,
     output_format="THWC",
     transform=train_transform,
 )
@@ -105,7 +104,6 @@ def main(
         step_between_clips=8,
         frame_sample_rate=2,
         train=False,
-        fold=2,
         output_format="THWC",
         transform=test_transform,
     )
@@ -160,7 +158,7 @@ def main(
         callbacks=callbacks,
     )
     trainer.fit(model, train_dataloaders=train_dataloader, val_dataloaders=val_dataloader, ckpt_path=resume_training)
-    trainer.save_checkpoint("./hmdb51.ckpt")
+    trainer.save_checkpoint("./vvit_hmdb51.ckpt")
 
 
 if __name__ == "__main__":

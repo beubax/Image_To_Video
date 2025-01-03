@@ -13,7 +13,14 @@ from torchvision.transforms import transforms as T
 from einops import rearrange
 from torchvision.utils import flow_to_image
 from torchvision.transforms._transforms_video import ToTensorVideo
+import numpy as np
+import spconv.pytorch as spconv
 from torchvision.models.optical_flow import raft_large
+import torchsparse
+from torchsparse import SparseTensor
+from torchsparse import nn as spnn
+from torchsparse.nn import functional as F
+from torch.masked import masked_tensor
 from vit.graph_transformer_pytorch import GraphTransformer
 from pytorchvideo.transforms import Normalize
 from vit.utils import create_mask, trunc_normal_
@@ -299,7 +306,7 @@ class VisionTransformer(nn.Module):
         # Classifier head
         self.head = LinearClassifier(embed_dim, num_classes) if num_classes > 0 else nn.Identity()
         self.graph_transformer = GraphTransformer(dim = embed_dim,
-        depth = 6,
+        depth = 4,
         with_feedforwards = True,
         gated_residual = True,
         accept_adjacency_matrix = True 
@@ -332,20 +339,13 @@ class VisionTransformer(nn.Module):
         h0 = h // self.patch_embed.patch_size
         # we add a small number to avoid floating point error in the interpolation
         # see discussion at https://github.com/facebookresearch/dino/issues/8
-        w0, h0 = w0 + 0.1, h0 + 0.1        
-        h0 = float(h0 / math.sqrt(N))
-        w0 = float(w0 / math.sqrt(N))
+        w0, h0 = w0 + 0.1, h0 + 0.1
         patch_pos_embed = nn.functional.interpolate(
             patch_pos_embed.reshape(1, int(math.sqrt(N)), int(math.sqrt(N)), dim).permute(0, 3, 1, 2),
-            scale_factor=(w0 , h0 ),
-            mode="bicubic",
+            scale_factor=(w0 / math.sqrt(N), h0 / math.sqrt(N)),
+            mode='bicubic',
         )
-        # patch_pos_embed = nn.functional.interpolate(
-        #     patch_pos_embed.reshape(1, int(math.sqrt(N)), int(math.sqrt(N)), dim).permute(0, 3, 1, 2),
-        #     scale_factor=(w0 / math.sqrt(N), h0 / math.sqrt(N)),
-        #     mode='bicubic',
-        # )
-        # assert int(w0) == patch_pos_embed.shape[-2] and int(h0) == patch_pos_embed.shape[-1]
+        assert int(w0) == patch_pos_embed.shape[-2] and int(h0) == patch_pos_embed.shape[-1]
         patch_pos_embed = patch_pos_embed.permute(0, 2, 3, 1).view(1, -1, dim)
         return patch_pos_embed
 
