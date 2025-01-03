@@ -82,6 +82,7 @@ def main(
     step_between_clips=8,
     frame_sample_rate=2,
     train=True,
+    fold=2,
     output_format="THWC",
     transform=train_transform,
 )
@@ -104,6 +105,7 @@ def main(
         step_between_clips=8,
         frame_sample_rate=2,
         train=False,
+        fold=2,
         output_format="THWC",
         transform=test_transform,
     )
@@ -158,7 +160,7 @@ def main(
         callbacks=callbacks,
     )
     trainer.fit(model, train_dataloaders=train_dataloader, val_dataloaders=val_dataloader, ckpt_path=resume_training)
-    trainer.save_checkpoint("./kinetics.ckpt")
+    trainer.save_checkpoint("./hmdb51.ckpt")
 
 
 if __name__ == "__main__":
