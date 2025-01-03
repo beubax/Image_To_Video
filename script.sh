@@ -29,7 +29,7 @@ source venv/bin/activate
 
 # run job
 
-python train.py --dataset-root hmdb51 --annotation-path annotations --batch-size 32 -p True
+python train.py --dataset-root hmdb51 --annotation-path annotations --batch-size 4
 
 deactivate
 # some other useful options:
